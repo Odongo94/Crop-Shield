@@ -13,9 +13,14 @@
 ---
 
 ### 📲 Direct Download Links (Version v4)
+* 👉 **[Browse All Releases on GitHub (Guaranteed Safe / No 404)](https://github.com/odongovincento/cropshield-ipm/releases)**
 * 👉 **[Direct Download CropShield-v4.apk (v4 Release)](https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk)**
-* 👉 **[Download Latest APK (Auto-Updating)](https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-latest.apk)**
-* 👉 **[Browse All Releases & Subsequent Updates](https://github.com/odongovincento/cropshield-ipm/releases)**
+* 👉 **[Download Latest Auto-Updating APK](https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-latest.apk)**
+
+> 💡 **Troubleshooting: If GitHub displays "404 - This is not the web page you are looking for"**:  
+> 1. Always open the **[Releases Overview Page](https://github.com/odongovincento/cropshield-ipm/releases)** — this page never 404s and lists all published versions (`v3`, `v4`).  
+> 2. **Attach the APK to GitHub**: GitHub releases only package `.zip` source code by default until an `.apk` is uploaded. To attach it in 30 seconds: on GitHub, click your release $\rightarrow$ Click **Edit** $\rightarrow$ Drag & drop `CropShield-v4.apk` (or `app-debug.apk`) into the **"Attach binaries by dropping them here"** box $\rightarrow$ Click **Update release**.  
+> 3. Once attached, direct links activate immediately for anyone around the world!
 
 ---
 
