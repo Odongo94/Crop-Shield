@@ -218,14 +218,14 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             )
                         }
 
-                        // 6. Direct APK Download & App Updates (v1)
+                        // 6. Direct APK Download & App Updates (v4)
                         IconButton(
                             onClick = { showDownloadDialog = true },
                             modifier = Modifier.testTag("action_download_app")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SystemUpdate,
-                                contentDescription = "Download CropShield APK & Updates (v1)",
+                                contentDescription = "Download CropShield APK & Updates (v4)",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }

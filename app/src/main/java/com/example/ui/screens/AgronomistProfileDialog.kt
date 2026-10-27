@@ -115,7 +115,7 @@ fun AgronomistProfileDialog(onDismiss: () -> Unit) {
 
                 Button(
                     onClick = {
-                        val apkUrl = "https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-v1.apk"
+                        val apkUrl = "https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk"
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
@@ -123,7 +123,7 @@ fun AgronomistProfileDialog(onDismiss: () -> Unit) {
                 ) {
                     Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Download CropShield APK (GitHub v1)")
+                    Text("Download CropShield APK (GitHub v4)")
                 }
             }
         },

@@ -54,12 +54,34 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun AppDownloadDialog(
     onDismiss: () -> Unit,
-    currentVersion: String = "v1.0.0 (v1)"
+    currentVersion: String = "v4.0.0 (v4)"
 ) {
     val context = LocalContext.current
-    val latestApkUrl = "https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-v1.apk"
+    val v4DirectUrl = "https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk"
+    val latestApkUrl = "https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-v4.apk"
+    val latestGenericUrl = "https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-latest.apk"
     val allReleasesUrl = "https://github.com/odongovincento/cropshield-ipm/releases"
     val repoUrl = "https://github.com/odongovincento/cropshield-ipm"
+
+    val shareText = """
+        🌾 Download CropShield IPM Android App (v4):
+        
+        Direct APK Download:
+        $v4DirectUrl
+        
+        Latest GitHub Release:
+        $allReleasesUrl
+        
+        Includes:
+        • Soil Classification & USDA Texture Triangle
+        • Crop Rotation Sustainability Designer
+        • 16L–2000L Knapsack & Tractor Tank Dosing
+        • Offline Google Satellite Farm GIS Mapping
+        • IPM Entomology Pest & Pathology Scanner
+        • Google Scholar Agricultural Science Journals
+        
+        Signed off by Crop Scientist Odongo Vincent.
+    """.trimIndent()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -79,7 +101,7 @@ fun AppDownloadDialog(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "GitHub Release Version: $currentVersion",
+                    text = "Release Version: $currentVersion",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
@@ -112,7 +134,7 @@ fun AppDownloadDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "v1",
+                                text = "v4",
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
@@ -120,13 +142,13 @@ fun AppDownloadDialog(
                         }
                         Column {
                             Text(
-                                text = "Active Build: CropShield v1",
+                                text = "Active Build: CropShield v4 (Release v4.0.0)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Automated updates: Push git tag 'v*' to publish v2, v3, etc.",
+                                text = "Upgraded from v3. Push tag 'v5' for next update.",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -138,7 +160,7 @@ fun AppDownloadDialog(
                 // Primary Direct Download Action
                 Button(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(latestApkUrl))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(v4DirectUrl))
                         context.startActivity(intent)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -150,10 +172,42 @@ fun AppDownloadDialog(
                     Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Direct Download APK (CropShield-v1.apk)",
+                        text = "Direct Download APK (CropShield-v4.apk)",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
+                }
+
+                // Secondary Latest Release Download Action
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(latestGenericUrl))
+                        context.startActivity(intent)
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Download Latest APK (Auto-Updating Link)")
+                }
+
+                // Share link with others (WhatsApp, Email, SMS)
+                Button(
+                    onClick = {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share CropShield v4 Download Link"))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Share Download Link with Team")
                 }
 
                 // GitHub Releases Web Link
@@ -172,26 +226,6 @@ fun AppDownloadDialog(
                     Text("Browse All Releases on GitHub")
                 }
 
-                // Share link with others
-                OutlinedButton(
-                    onClick = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                "Download CropShield IPM Android App (v1) directly from GitHub:\n$latestApkUrl\n\nFull repository & updates:\n$repoUrl"
-                            )
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share CropShield Download Link"))
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Share Download Link with Team")
-                }
-
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                 // Step-by-Step Installation Instructions
@@ -205,19 +239,19 @@ fun AppDownloadDialog(
                 InstallStepRow(
                     stepNum = "1",
                     title = "Download APK",
-                    description = "Tap 'Direct Download APK'. If Chrome warns 'File might be harmful', select 'Download anyway' (standard for direct APKs)."
+                    description = "Tap 'Direct Download APK'. If Chrome warns 'File might be harmful', select 'Download anyway' (standard for direct APKs outside Google Play)."
                 )
 
                 InstallStepRow(
                     stepNum = "2",
                     title = "Allow Install from Browser",
-                    description = "Tap the completed notification or find CropShield-v1.apk in Files/Downloads. If prompted, toggle 'Allow from this source'."
+                    description = "Tap the completed notification or find CropShield-v4.apk in Files/Downloads. If prompted, toggle 'Allow from this source'."
                 )
 
                 InstallStepRow(
                     stepNum = "3",
                     title = "Install or Update",
-                    description = "Tap 'Install'. When upgrading from v1 to future versions (v2, v3...), tap 'Update' — all your saved scouting sheets, field notes, and farm maps are 100% preserved!"
+                    description = "Tap 'Install'. When upgrading from v3 to v4 (or future v5, v6...), tap 'Update' — all your saved scouting sheets, field notes, and farm maps are 100% preserved!"
                 )
 
                 // Subsequent Updates note
@@ -238,7 +272,7 @@ fun AppDownloadDialog(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "To publish subsequent updates (v2, v3...): in GitHub, create a new tag e.g. 'v2' and the GitHub Actions workflow automatically builds and publishes the new APK to the Releases page.",
+                            text = "To publish subsequent updates (v5, v6...): push tag e.g. 'v5' to GitHub, and the automated GitHub Actions pipeline will compile and attach the new APK without data loss.",
                             style = MaterialTheme.typography.bodySmall,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface

@@ -7,14 +7,31 @@
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-36-blueviolet.svg)](https://developer.android.com/about/versions/16)
 [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](LICENSE)
 
-[![Direct APK Download](https://img.shields.io/badge/Download%20APK-CropShield--v1.apk-success?style=for-the-badge&logo=android)](https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-v1.apk)
+[![Direct APK Download](https://img.shields.io/badge/Download%20APK-CropShield--v4.apk-success?style=for-the-badge&logo=android)](https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk)
 [![GitHub Release](https://img.shields.io/github/v/release/odongovincento/cropshield-ipm?style=for-the-badge&logo=github)](https://github.com/odongovincento/cropshield-ipm/releases)
 
 ---
 
-### 📲 Direct Download Link
-👉 **[Download CropShield v1 APK (Direct from GitHub Releases)](https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-v1.apk)**  
-👉 **[Browse All Releases & Subsequent Updates](https://github.com/odongovincento/cropshield-ipm/releases)**
+### 📲 Direct Download Links (Version v4)
+* 👉 **[Direct Download CropShield-v4.apk (v4 Release)](https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk)**
+* 👉 **[Download Latest APK (Auto-Updating)](https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-latest.apk)**
+* 👉 **[Browse All Releases & Subsequent Updates](https://github.com/odongovincento/cropshield-ipm/releases)**
+
+---
+
+### 💬 Shareable Download Link (Copy & Send to Farmers / Scouts)
+
+> **🌾 CropShield IPM v4 (Android Precision Agronomy App)**  
+> Direct APK Download:  
+> https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk  
+>   
+> GitHub Releases Portal:  
+> https://github.com/odongovincento/cropshield-ipm/releases  
+>   
+> *Includes USDA Soil Texture Calculator, Crop Rotation Matrix, 16L–2000L Knapsack & Tractor Tank Dosing, Offline Satellite Farm GIS Mapping, Agricultural Entomology Pest Scanner, and Google Scholar Journals.*  
+> *Signed off by Crop Scientist Odongo Vincent.*
+
+---
 
 > **Offline crop agronomy, agricultural entomology pest diagnostics, weed bio-indicator soil diagnostician, crop pathology, precision scouting sheets, GPS field mapping, soil classification calculator, Google Scholar scientific journals, and crop rotation suite signed off by Crop Scientist Odongo Vincent.**
 
@@ -32,13 +49,13 @@ Follow these 4 simple steps to install CropShield on any Android device (or shar
 
 ### Step 1: Download the APK
 On your phone's browser (Chrome, Samsung Internet, Firefox), tap the direct download link:  
-👉 **[Download CropShield-v1.apk](https://github.com/odongovincento/cropshield-ipm/releases/latest/download/CropShield-v1.apk)**
+👉 **[Download CropShield-v4.apk](https://github.com/odongovincento/cropshield-ipm/releases/download/v4/CropShield-v4.apk)**
 
-> *Note: If Android displays a warning: `"File might be harmful. Do you want to download CropShield-v1.apk anyway?"`, tap **"Download anyway"**. This standard system notice appears for all applications installed directly outside the Google Play Store.*
+> *Note: If Android displays a warning: `"File might be harmful. Do you want to download CropShield-v4.apk anyway?"`, tap **"Download anyway"**. This standard system notice appears for all applications installed directly outside the Google Play Store.*
 
 ### Step 2: Open Downloaded File
 * When the download completes, tap **"Open"** from your browser notification tray.
-* Or open your phone's **Files** or **Downloads** app and tap `CropShield-v1.apk`.
+* Or open your phone's **Files** or **Downloads** app and tap `CropShield-v4.apk`.
 
 ### Step 3: Allow Install from This Source (First-Time Only)
 If Android prompts: `"For your security, your phone is not allowed to install unknown apps from this source"`:
@@ -47,38 +64,46 @@ If Android prompts: `"For your security, your phone is not allowed to install un
 3. Tap the **Back** arrow to return to the installer.
 
 ### Step 4: Tap Install (or Update)
-* Tap **"Install"**.
+* Tap **"Install"** (or **"Update"** if upgrading from v3 or earlier).
 * Once finished, tap **"Open"** to launch CropShield IPM!
 
 ---
 
-## 🔄 Version Management & Seamless Subsequent Updates (`v1`, `v2`, `v3`...)
+## 🔄 Version Management & Seamless Subsequent Updates (`v4` $\rightarrow$ `v5`, `v6`...)
 
 ### How Subsequent Updates Work
-When you install subsequent versions (e.g. updating from `v1` to `v2` or `v3`):
-* Simply download and tap the new APK. Android recognizes the application package and prompts **"Do you want to update this app?"**
+When you install subsequent versions (e.g. updating from `v3` to `v4`, or later to `v5`):
+* Simply download and tap the new APK (`CropShield-v4.apk`). Android recognizes the existing application package and prompts **"Do you want to update this app?"**
 * Tap **"Update"**.
 * **Zero Data Loss**: All your saved scouting records, farm field boundaries, GPS hectares, fertilizer history, and offline notes stored in the local SQLite/Room database remain **100% intact**.
 
-### How to Release Subsequent Versions on GitHub
-The repository includes an automated GitHub Actions CI/CD pipeline (`.github/workflows/release.yml`). To assign a new version and publish subsequent updates:
+### How to Release Version v4 (and Future Versions) on GitHub
+The repository includes an automated GitHub Actions CI/CD pipeline (`.github/workflows/release.yml`). To assign `v4` and publish subsequent updates:
 
 1. **Push a Git Version Tag:**
    ```bash
-   # Assign and push the next release tag (e.g. v2 or v1.1.0)
-   git tag v2
-   git push origin v2
+   # Assign and push the v4 release tag
+   git tag v4
+   git push origin v4
    ```
 
 2. **Automated Build & Distribution:**
-   * GitHub Actions automatically wakes up, checks out the repository, and runs the Android build.
-   * It creates a new release on GitHub under `Tags > v2`.
-   * It automatically attaches `CropShield-v2.apk` and `CropShield-latest.apk` as downloadable assets.
-   * Anyone visiting `https://github.com/odongovincento/cropshield-ipm/releases/latest` will immediately get the latest APK!
+   * GitHub Actions automatically wakes up, checks out the repository, and runs `gradle assembleDebug`.
+   * It creates a new release on GitHub under `Tags > v4`.
+   * It automatically attaches `CropShield-v4.apk` and `CropShield-latest.apk` as downloadable assets.
+   * Anyone visiting `https://github.com/odongovincento/cropshield-ipm/releases/latest` or using the direct links will immediately receive `v4`!
 
-3. **Manual Trigger (Alternative):**
+3. **Subsequent Versions (v5, v6, etc.):**
+   When you're ready for the next release, simply run:
+   ```bash
+   git tag v5
+   git push origin v5
+   ```
+   Or go to **GitHub > Releases > "Draft a new release"**, choose tag `v5`, and publish.
+
+4. **Manual Workflow Dispatch (Alternative):**
    * Go to **GitHub > Actions > "Build & Release CropShield APK"**.
-   * Click **"Run workflow"**, type the version (e.g. `v2` or `v1.1`), and click Run.
+   * Click **"Run workflow"**, type `v4` (or `v5`), and click Run.
 
 ---
 

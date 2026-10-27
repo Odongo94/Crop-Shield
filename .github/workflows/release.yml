@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: 'Release Version Tag (e.g., v1, v1.0.0)'
+        description: 'Release Version Tag (e.g., v4, v4.0.0)'
         required: true
-        default: 'v1.0.0'
+        default: 'v4.0.0'
 
 permissions:
   contents: write
@@ -47,17 +47,19 @@ jobs:
       - name: Prepare Release APK Asset
         run: |
           mkdir -p release-artifacts
-          TAG_NAME="${{ github.ref_name || github.event.inputs.version_tag || 'v1' }}"
+          TAG_NAME="${{ github.ref_name || github.event.inputs.version_tag || 'v4' }}"
           # Find generated debug APK
           APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
           if [ -f "$APK_PATH" ]; then
             echo "Found APK at $APK_PATH"
             cp "$APK_PATH" "release-artifacts/CropShield-${TAG_NAME}.apk"
+            cp "$APK_PATH" "release-artifacts/CropShield-v4.apk"
             cp "$APK_PATH" "release-artifacts/CropShield-latest.apk"
           else
             echo "APK not found in expected folder, checking entire repo..."
             FALLBACK_APK=$(find . -name "*.apk" | head -n 1)
             cp "$FALLBACK_APK" "release-artifacts/CropShield-${TAG_NAME}.apk"
+            cp "$FALLBACK_APK" "release-artifacts/CropShield-v4.apk"
             cp "$FALLBACK_APK" "release-artifacts/CropShield-latest.apk"
           fi
           ls -la release-artifacts
@@ -66,18 +68,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          name: "CropShield IPM ${{ github.ref_name || github.event.inputs.version_tag }}"
-          tag_name: ${{ github.ref_name || github.event.inputs.version_tag }}
+          name: "CropShield IPM ${{ github.ref_name || github.event.inputs.version_tag || 'v4' }}"
+          tag_name: ${{ github.ref_name || github.event.inputs.version_tag || 'v4' }}
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            ## 🌾 CropShield IPM Release
+            ## 🌾 CropShield IPM Release ${{ github.ref_name || github.event.inputs.version_tag || 'v4' }}
             
-            Welcome to the official release of **CropShield IPM**!
+            Welcome to the official release of **CropShield IPM v4**!
             
             ### 📥 Direct APK Download:
-            * **[Download CropShield-${{ github.ref_name || github.event.inputs.version_tag }}.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name || github.event.inputs.version_tag }}/CropShield-${{ github.ref_name || github.event.inputs.version_tag }}.apk)**
+            * **[Download CropShield-v4.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name || github.event.inputs.version_tag || 'v4' }}/CropShield-v4.apk)**
             * **[Download Latest APK (Always Points to Latest Release)](https://github.com/${{ github.repository }}/releases/latest/download/CropShield-latest.apk)**
             
             ### 📱 How to Install on Android:
@@ -87,6 +89,6 @@ jobs:
                - Tap **Settings**.
                - Turn ON **"Allow from this source"**.
                - Press Back and tap **Install**.
-            4. Subsequent updates (e.g. `v2`, `v3`) can be installed straight over this version without losing your offline field notes or scouting records!
+            4. Subsequent updates (e.g. `v5`, `v6`...) can be installed straight over this version without losing your offline field notes, scouting sheets, or farm maps!
           files: |
             release-artifacts/*.apk
