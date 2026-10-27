@@ -68,9 +68,7 @@ import com.example.data.ThreatCatalog
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Terrain
-import androidx.compose.material.icons.filled.SystemUpdate
 import com.example.ui.screens.AgronomistProfileDialog
-import com.example.ui.screens.AppDownloadDialog
 import com.example.ui.screens.AgronomyScreen
 import com.example.ui.screens.CalculatorScreen
 import com.example.ui.screens.DiagnoseScreen
@@ -123,7 +121,6 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
     val unifiedSearchResults by viewModel.unifiedSearchResults.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAgronomistDialog by remember { mutableStateOf(false) }
-    var showDownloadDialog by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentScreen != AppScreen.LIBRARY) {
         viewModel.navigateBack()
@@ -144,7 +141,7 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                 AppScreen.LIFECYCLE_LAB -> "Lifecycle Lab"
                                 AppScreen.CALCULATOR -> "Knapsack Fertilizer Calculator"
                                 AppScreen.SOIL_CALCULATOR -> "Soil Texture & Rotation Calculator"
-                                AppScreen.FIELD_NOTES -> "Field Notes & Observations"
+                                AppScreen.FIELD_NOTES -> "Field Agronomy Notebook"
                                 AppScreen.SCOUT_LOG -> "Field Scouting Logs"
                                 AppScreen.SCOUTING_SHEETS -> "Scouting Sheets & Protocols"
                                 AppScreen.THREAT_DETAIL -> ""
@@ -214,18 +211,6 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = "Lead Agronomist & Developer Odongo Vincent",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // 6. Direct APK Download & App Updates (v4)
-                        IconButton(
-                            onClick = { showDownloadDialog = true },
-                            modifier = Modifier.testTag("action_download_app")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SystemUpdate,
-                                contentDescription = "Download CropShield APK & Updates (v4)",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -346,11 +331,11 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                         icon = {
                             Icon(
                                 imageVector = Icons.Default.EditNote,
-                                contentDescription = "Field Notes",
+                                contentDescription = "Field Agronomy Notebook",
                                 modifier = Modifier.size(24.dp)
                             )
                         },
-                        label = { Text("Notes", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Notebook", style = MaterialTheme.typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -636,11 +621,6 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
     // Lead Agronomist & Developer Profile Dialog (Odongo Vincent)
     if (showAgronomistDialog) {
         AgronomistProfileDialog(onDismiss = { showAgronomistDialog = false })
-    }
-
-    // Direct APK Download & GitHub Version Update Dialog (v1)
-    if (showDownloadDialog) {
-        AppDownloadDialog(onDismiss = { showDownloadDialog = false })
     }
 }
 

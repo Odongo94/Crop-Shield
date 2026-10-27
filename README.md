@@ -178,10 +178,13 @@ The repository includes an automated GitHub Actions CI/CD pipeline (`.github/wor
 * **Integrated 3-Tier IPM Protocol**: Provides Infonet-Biovision cultural remedies, CABI BioProtection registered biological agents, and PCPB Kenya approved agrochemical active ingredients with specific dilution rates.
 * **Disease Lifecycle Lab**: Interactive 4-stage pathogenesis visualizer (Inoculation, Incubation, Symptom Expression, Overwintering) detailing optimal chemical/biological intervention windows.
 
-### 7. 📋 Precision Scouting Sheets & Field Notes
-* **Customizable Scouting Sheets**: Edit scout names, farm blocks, variety batches, and inspection dates.
-* **Standardized Monitoring Protocols**: Economic Threshold Levels (ETL) and Economic Injury Levels (EIL) with CSV report export.
-* **Offline Field Notes**: Store timestamped observations, pest severity scores, and photos using local Room Database persistence.
+### 7. 📓 Editable Field Agronomy Notebook & Column-Based Diary
+* **Notebook Structure with Dedicated Entry Columns**: Formatted as a real agricultural field notebook with structured columns for **Date & Time**, **Plot / Block Location**, **Crop & Variety**, **Phenological Growth Stage**, **Observed Pest / Disease / Symptom**, **Severity Level**, **Soil / Moisture Condition**, **Action / Treatment Taken**, and **Field Remarks**.
+* **100% User Editable Anytime**: Users can tap any notebook entry or table row to edit any column value at their convenience, with instant local Room SQLite persistence.
+* **Dual Viewing Formats**:
+  * **Lined Notebook Pages**: Authentic notebook layout with page numbering, binder margins, column badges, and quick-edit controls.
+  * **Multi-Column Ledger Table**: Horizontally scrollable farm ledger table displaying all entry columns side-by-side with 1-tap row editing.
+* **1-Tap CSV Notebook Export & Sharing**: Instantly generate and share a full column-formatted CSV file of all field observations via WhatsApp, email, or cloud drive.
 
 ### 8. 📚 Google Scholar Scientific Research & Crop Production Library
 * **Google Scholar Direct Research**: Seamlessly browse peer-reviewed agronomic papers directly within each crop profile. Tapping any journal opens the citation directly on Google Scholar.
