@@ -44,7 +44,12 @@ object AgriculturistCurriculumCatalog {
                 sub.title.lowercase().contains(q) ||
                 sub.coreDefinition.lowercase().contains(q) ||
                 sub.detailedElaboration.lowercase().contains(q) ||
-                sub.keyMechanismsAndFormulas.any { it.lowercase().contains(q) }
+                sub.keyMechanismsAndFormulas.any { it.lowercase().contains(q) } ||
+                sub.biologicalAndChemicalDetails.any { it.lowercase().contains(q) } ||
+                sub.stepByStepFieldProtocols.any { it.lowercase().contains(q) } ||
+                sub.clinicalOrDiagnosticSigns.any { it.lowercase().contains(q) } ||
+                sub.boardExamWorkedProblems.any { it.lowercase().contains(q) } ||
+                sub.authoritativeTextbookRef.lowercase().contains(q)
             }
         }
     }

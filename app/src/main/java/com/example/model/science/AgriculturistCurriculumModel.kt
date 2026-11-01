@@ -89,7 +89,12 @@ data class CurriculumSubtopic(
     val keyMechanismsAndFormulas: List<String>,
     val detailedElaboration: String,
     val commonExamQuestions: List<String>,
-    val practicalTakeaway: String
+    val practicalTakeaway: String,
+    val biologicalAndChemicalDetails: List<String> = emptyList(),
+    val stepByStepFieldProtocols: List<String> = emptyList(),
+    val clinicalOrDiagnosticSigns: List<String> = emptyList(),
+    val boardExamWorkedProblems: List<String> = emptyList(),
+    val authoritativeTextbookRef: String = ""
 )
 
 /**

@@ -405,6 +405,14 @@ fun SubtopicDetailItem(
     subtopic: CurriculumSubtopic
 ) {
     var showElaboration by remember { mutableStateOf(false) }
+    var showFullStudyDialog by remember { mutableStateOf(false) }
+
+    if (showFullStudyDialog) {
+        SubtopicStudyDialog(
+            subtopic = subtopic,
+            onDismiss = { showFullStudyDialog = false }
+        )
+    }
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -445,12 +453,25 @@ fun SubtopicDetailItem(
                     )
                 }
 
-                Icon(
-                    if (showElaboration) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showFullStudyDialog = true },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = "Full Study Guide",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Icon(
+                        if (showElaboration) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             // Core definition
@@ -461,6 +482,40 @@ fun SubtopicDetailItem(
                 lineHeight = 17.sp,
                 modifier = Modifier.padding(top = 4.dp)
             )
+
+            // Button to open full comprehensive study guide
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    modifier = Modifier.clickable { showFullStudyDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Open Full Lecture & Field SOP",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
 
             AnimatedVisibility(visible = showElaboration) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -510,6 +565,34 @@ fun SubtopicDetailItem(
                         modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
                     )
 
+                    // Solved Board Exam problem preview
+                    if (subtopic.boardExamWorkedProblems.isNotEmpty()) {
+                        Surface(
+                            color = Color(0xFFE8F5E9),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, Color(0xFF81C784)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text(
+                                    text = "🧮 Solved Board Exam Calculation:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1B5E20)
+                                )
+                                Text(
+                                    text = subtopic.boardExamWorkedProblems.first(),
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF2E7D32),
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
                     // Practical Takeaway
                     Surface(
                         color = Color(0xFF2E7D32).copy(alpha = 0.1f),
@@ -533,6 +616,17 @@ fun SubtopicDetailItem(
                                 lineHeight = 16.sp
                             )
                         }
+                    }
+
+                    // Textbook reference tag
+                    if (subtopic.authoritativeTextbookRef.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "📚 Ref: ${subtopic.authoritativeTextbookRef}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
