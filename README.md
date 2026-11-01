@@ -190,7 +190,53 @@ The repository includes an automated GitHub Actions CI/CD pipeline (`.github/wor
 * **Google Scholar Direct Research**: Seamlessly browse peer-reviewed agronomic papers directly within each crop profile. Tapping any journal opens the citation directly on Google Scholar.
 * **Interactive Scientific Search Bar**: Query Google Scholar for any agricultural topic, pest resistance study, or soil fertility kinetic paper directly from the library.
 * **Institutional Evidence Base**: Papers curated from KALRO (Kenya Agricultural & Livestock Research Organization), ICIPE (International Centre of Insect Physiology and Ecology), CABI, CIMMYT, Elsevier, and Springer Nature.
-* **Interactive Agronomy Examination**: Built-in 20-question agricultural science examination covering soil chemistry, entomology, plant pathology, and weed biology.
+
+### 9. 🎓 Agriculturist Licensure & Academic Learning Suite (6 Core Areas)
+* **Complete 6-Pillar Licensure Syllabus**: Directly integrates the official syllabus curriculum for Professional Agriculturists with detailed scientific elaborations, biochemical mechanisms, practical takeaways, and exam focus points:
+  1. **Crop Science**:
+     * *Agronomy*: Cereals & Field Legumes, Root & Tuber Crops, Seed Physiology, Industrial Crop Production
+     * *Horticulture*: Pomology (fruit science & chilling requirements), Olericulture (vegetable physiology & greenhouse fertigation), Floriculture (export cut flowers & pulsing solutions), Landscape Management (CODIT pruning & hydrozoning)
+     * *Plant Breeding and Genetics*: Quantitative inheritance, Breeder's Equation ($R = h^2 \times S$), cytoplasmic male sterility, heterosis, and marker-assisted selection
+     * *Farming Systems*: Land Equivalent Ratio ($\text{LER} > 1.0$), alley cropping, and Conservation Agriculture
+     * *Agricultural Biotechnology*: In vitro plant tissue culture (auxin:cytokinin organogenesis ratios), transgenic Bt Cry endotoxins, and CRISPR/Cas9
+     * *Crop Physiology & Ecology*: C3 vs. C4 Kranz anatomy, SPAC water potential gradients ($\Psi_w = \Psi_s + \Psi_p + \Psi_m$), and photorespiration
+     * *Seed Technology & Production*: Breeder, Foundation, Registered, and Certified seed classes, Pure Live Seed (PLS), isolation distances, and ISTA testing
+     * *Postharvest Management*: Climacteric vs. non-climacteric respiration kinetics, ethylene receptor blockade by 1-MCP, and modified atmosphere packaging
+  2. **Soil Science**:
+     * *Soil Genesis, Composition & Development*: Hans Jenny's 5 factors ($S = f(Cl, O, R, P, T)$), Goldich weathering series, and master horizon development ($O-A-E-B-C-R$)
+     * *Soil Taxonomy, Classification & Land Use*: The 12 USDA Soil Orders (Vertisols, Andisols, Mollisols, Oxisols, etc.) and Land Capability Classes I–VIII
+     * *Soil Microbiology*: C:N ratio mineralization-immobilization thresholds ($>30:1$ vs. $<20:1$), biological nitrogen fixation, and mycorrhizal AMF hyphal networks
+     * *Soil Physics*: Stokes' law sedimentation, bulk density ($D_b$), porosity, Available Water Capacity (AWC), and Darcy's law
+     * *Soil Fertility and Management*: Liebig's Law of the Minimum, 4R nutrient stewardship, nutrient mobility diagnoses, and acid soil liming chemistry
+     * *Soil Chemistry*: Cation Exchange Capacity (CEC), Percentage Base Saturation (%BS), Lyotropic exchange affinity series, and Gypsum reclamation of sodic soils ($ESP > 15\%$)
+  3. **Animal Science**:
+     * *Animal Breeding & Genetics*: Heritability ($h^2$), Estimated Breeding Values (EBVs), inbreeding depression, and terminal crossbreeding
+     * *Animal Physiology*: Neuroendocrine regulation of estrous cycles (GnRH, LH, FSH, Progesterone, PGF2α), oxytocin milk letdown, and thermoregulation
+     * *Animal Nutrition*: Ruminant fermentation (Acetate, Propionate, Butyrate VFAs), Weende proximate analysis, Van Soest NDF/ADF fiber systems, and Pearson Square ration balancing
+     * *Animal Products Processing*: Rigor mortis and glycolysis curves, prevention of PSE and DFD meat conditions, HTST milk pasteurization ($72^\circ\text{C}$ for 15s), and Haugh Unit egg grading
+     * *Animal Health and Diseases*: Biosecurity exclusion, Anthrax protocols, African Swine Fever (ASF), Foot-and-Mouth Disease (FMD), and California Mastitis Test (CMT)
+     * *Poultry Production*: Broiler brooding curves, layer 16-hour lighting regimens, incubation physical parameters, and Feed Conversion Ratio (FCR)
+     * *Swine Production*: Sow farrowing crate management, 114-day gestation, and neonatal iron dextran injection
+     * *Ruminant Production*: (i) Dairy & Meat Goat management with FAMACHA selective deworming, (ii) Sheep flushing and copper toxicity prevention, (iii) Bovine colostrum feeding rules (10% bodyweight within 6 hrs) and transition cow ketosis, (iv) Carabao / Water Buffalo (*Bubalus bubalis*) draft physiology, wallowing thermoregulation, and high-butterfat (8%) dairy production
+  4. **Crop Protection**:
+     * *Plant Pathology*: Bacteriology (Ralstonia stem streaming test & T3SS), Mycology (Oomycetes vs. True Fungi & appressorium mechanics), Nematology (Root-knot *Meloidogyne* giant cells & biofumigation), and Virology (+ssRNA, stylet-borne non-persistent vs. persistent circulative transmission)
+     * *Entomology*: Insect mouthpart adaptations, complete (holometabolous) vs. incomplete (hemimetabolous) metamorphosis, Economic Threshold (ET), and Economic Injury Level ($EIL = C / [V \times I \times D \times K]$)
+     * *Weed Science*: Botanical differentiation (Grasses, Sedges, Broadleaves), Critical Period of Weed Control (CPWC), and HRAC herbicide resistance rotation
+     * *Management of Plant Diseases*: The Disease Triangle & Tetrahedron, Whetzel's 5 principles (Exclusion, Eradication, Protection, Resistance, Therapy), and FRAC resistance codes
+     * *Problems in Insecticide & Dosing Calculations*: Sprayer application volume formula ($\text{L/ha} = [\text{L/min} \times 600] / [\text{km/h} \times \text{swath m}]$), active ingredient percentage dilution, and knapsack tank dosage calculations
+  5. **Agricultural Economics & Marketing**:
+     * *Microeconomics & Elasticities*: Price elasticity of demand ($E_d$), Engel's Law, King's Law farmer paradox, and agricultural price volatility
+     * *Production Analysis & Cost Curves*: Neoclassical production function, rational economic operating Stage II ($MPP < APP$ and $MPP > 0$), profit maximization ($MR = MC$, $VMP = MFC$), shutdown point ($P < \min AVC$), and break-even point ($P = \min ATC$)
+     * *Macroeconomics & Agricultural Policy*: National income accounting (GDP contribution), monetary policy interest rate impacts, and fertilizer subsidy welfare effects
+     * *Agricultural Marketing*: The four marketing utilities (Form, Place, Time, Possession), marketing margins, and Farmer's Share of the consumer dollar
+  6. **Agricultural Extension & Communications**:
+     * *Philosophy & Andragogy*: 'Helping people help themselves', Malcolm Knowles' adult learning principles, and Edgar Dale's Cone of Experience (90% retention through doing)
+     * *Development Communication & Commodity Policy*: Participatory Rural Appraisal (PRA) transect walks and seasonal calendars, and price stabilization policies
+     * *Extension Methods*: Individual visits, Group Farmer Field Schools (FFS), Method Demonstrations vs. Result Demonstrations, and mass digital mobile advisory
+     * *Communication Models*: David Berlo's SMCRF model (Source, Message, Channel, Receiver, Feedback) and semantic communication noise
+     * *Innovation Adoption Process*: The 5 AIETA stages (Awareness, Interest, Evaluation, Trial, Adoption) and Everett Rogers' 5 Adopter Categories (Innovators 2.5%, Early Adopters 13.5%, Early Majority 34%, Late Majority 34%, Laggards 16%)
+* **📚 Authoritative Academic Book Library**: Curated repository of classic and standard university textbooks (Brady & Weil's *The Nature and Properties of Soils*, Agrios' *Plant Pathology*, Taiz & Zeiger's *Plant Physiology*, Ensminger's *Animal Science*, Pedigo's *Entomology and Pest Management*, Drummond's *Agricultural Economics*, Rogers' *Diffusion of Innovations*, and more) complete with core chapter breakdowns and 1-tap Google Scholar academic research queries.
+* **✍️ Interactive Licensure Practice Exam**: Comprehensive multiple-choice board examination simulation with instant feedback, scientific explanations, and citations to recommended textbooks.
 
 ---
 

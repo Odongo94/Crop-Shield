@@ -63,9 +63,12 @@ import com.example.data.science.AgriculturalSciencesCatalog
 import com.example.model.DeveloperInfo
 
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.School
 import com.example.ui.screens.science.AgriculturalJournalsView
+import com.example.ui.screens.science.AgriculturistCurriculumView
 
 enum class SciencePillarTab(val title: String, val icon: ImageVector) {
+    CURRICULUM_6_AREAS("6 Areas & Books", Icons.Default.School),
     SOIL_SCIENCE("Soil Science", Icons.Default.Terrain),
     PATHOLOGY("Crop Pathology", Icons.Default.Coronavirus),
     ENTOMOLOGY("Entomology", Icons.Default.BugReport),
@@ -111,15 +114,20 @@ fun AgriculturalSciencesView(
             }
         }
 
-        if (SciencePillarTab.values()[activeTab] == SciencePillarTab.JOURNALS_LEARNING) {
-            AgriculturalJournalsView(modifier = Modifier.fillMaxSize())
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
+        when (SciencePillarTab.values()[activeTab]) {
+            SciencePillarTab.CURRICULUM_6_AREAS -> {
+                AgriculturistCurriculumView(modifier = Modifier.fillMaxSize())
+            }
+            SciencePillarTab.JOURNALS_LEARNING -> {
+                AgriculturalJournalsView(modifier = Modifier.fillMaxSize())
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
                 when (SciencePillarTab.values()[activeTab]) {
                 // =============================================================
                 // PILLAR 1: SOIL SCIENCE & EDAPHOLOGY
@@ -563,12 +571,14 @@ fun AgriculturalSciencesView(
                         }
                     }
                 }
+                SciencePillarTab.CURRICULUM_6_AREAS,
                 SciencePillarTab.JOURNALS_LEARNING -> {
-                    // Handled in top branch
+                    // Handled in outer branch
                 }
             }
         }
     }
+}
 }
 }
 
