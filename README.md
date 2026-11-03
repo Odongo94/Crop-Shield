@@ -238,6 +238,78 @@ The repository includes an automated GitHub Actions CI/CD pipeline (`.github/wor
 * **📚 Authoritative Academic Book Library**: Curated repository of classic and standard university textbooks (Brady & Weil's *The Nature and Properties of Soils*, Agrios' *Plant Pathology*, Taiz & Zeiger's *Plant Physiology*, Ensminger's *Animal Science*, Pedigo's *Entomology and Pest Management*, Drummond's *Agricultural Economics*, Rogers' *Diffusion of Innovations*, and more) complete with core chapter breakdowns and 1-tap Google Scholar academic research queries.
 * **✍️ Interactive Licensure Practice Exam**: Comprehensive multiple-choice board examination simulation with instant feedback, scientific explanations, and citations to recommended textbooks.
 
+### 10. ⚡ Soil Cation Exchange Capacity (CEC) & Albrecht BCSR Rebalancing Calculator
+* **Dual Diagnostic Evaluation Modes**:
+  * **Laboratory Soil Cations Entry**: Input measured exchangeable cations from laboratory reports ($Ca^{2+}, Mg^{2+}, K^+, Na^+$ in meq/100g or cmol(+)/kg) and exchangeable acidity ($Al^{3+} + H^+$).
+  * **Colloidal Particle Pedotransfer Estimation**: Calculate estimated effective CEC from soil texture and organic matter using the pedotransfer equation:
+    $$\text{CEC}_{\text{est}} = (0.05 \times \%\,\text{Sand}) + (0.15 \times \%\,\text{Silt}) + (0.65 \times \%\,\text{Clay}) + (2.0 \times \%\,\text{Organic Matter})$$
+* **Albrecht Base Cation Saturation Ratio (BCSR) Audit**:
+  * Calculates Total Cation Exchange Capacity ($\text{CEC} = \sum \text{Cations}$).
+  * Computes Base Saturation ($\%\,\text{BS} = \frac{Ca + Mg + K + Na}{\text{CEC}} \times 100$).
+  * Compares actual saturation percentages against ideal target intervals:
+    * Calcium Saturation: **65% – 75%**
+    * Magnesium Saturation: **10% – 15%**
+    * Potassium Saturation: **3% – 5%**
+    * Sodium Saturation: **$< 1.5\%$** (Identifies sodicity hazard if $> 5\%$)
+    * Exchangeable Acidity: **$< 5\%$** (Alkaline/neutral) vs. Toxic Aluminum saturation
+* **Exact Cation Balance Ratios**:
+  * **$Ca:Mg$ Ratio**: Target $5:1$ to $7:1$. Flags soil dispersion and crusting if $< 3:1$, or induced magnesium deficiency if $> 10:1$.
+  * **$Mg:K$ Ratio**: Target $2:1$ to $3:1$. Flags potassium uptake blockages if $> 4:1$.
+* **Prescriptive Soil Amendment Dosing (kg/ha and kg/acre)**:
+  * Calculates exact application weights for **Agricultural Lime** ($\text{CaCO}_3$), **Dolomitic Limestone** ($\text{CaMg}(\text{CO}_3)_2$), **Gypsum** ($\text{CaSO}_4 \cdot 2\text{H}_2\text{O}$), **Sulfate of Potash** ($\text{K}_2\text{SO}_4$), **Humic Compost**, and **Biochar**.
+  * Complete step-by-step mathematical derivations displayed in the UI.
+
+### 11. 🌿 Organic Manure Masterclass & Crop Tonnage Calculator
+* **Precision Crop Manure Tonnage Engine**:
+  * Computes exact dry-matter and moist tonnage requirements per hectare and acre across 10 commercial crops (Tomatoes, Irish Potatoes, Maize, French Beans, Brassicas, Onions, Coffee, Avocados, Bananas, Cut Roses).
+  * Calculates the exact number of **50 kg standard manure bags** and **grams/kg per planting hole/tree station**.
+  * Predicts 1st-year available Nitrogen ($\text{kg N/ha}$), Phosphorus ($\text{kg P}_2\text{O}_5\text{/ha}$), and Potassium ($\text{kg K}_2\text{O/ha}$) supplied via mineralization equations:
+    $$\text{Tons}_{\text{req}} = \frac{\text{Crop N Demand (kg/ha)}}{\text{Total N in Manure (kg/t)} \times \text{Year 1 Mineralization Rate}} \times \text{Soil OM Correction Factor}$$
+* **Standard Operating Procedures (SOPs) for 5 Composting Methods**:
+  1. **18-Day Berkeley Hot Composting Method**: Rapid thermophilic compost in 18 days with precise turning schedules on days 4, 6, 8, 10, 12, 14.
+  2. **Aerobic Windrow Composting**: Large-scale farm waste windrows ($1.5\text{ m}$ height) with trapezoidal cross-sections.
+  3. **Indore Heap & Pit Composting**: Traditional low-input layer system (Browns, Greens, Animal Dung, Wood Ash/Topsoil) with central aeration chimney.
+  4. **Vermicomposting (Earthworm Farming)**: Epigeic earthworm cultivation (*Eisenia fetida* / Red Wigglers) for biological casting harvest and aerated worm tea.
+  5. **Bokashi Anaerobic Fermentation**: Japanese lactic acid fermentation using EM-1 (Effective Microorganisms), molasses, and wheat bran under airtight seal.
+* **Raw Materials Database with C:N Ratios**:
+  * Detailed catalog distinguishing Brown (Carbon-rich) and Green (Nitrogen-rich) materials with their specific C:N ratios, moisture contents, and preparation handling tips.
+* **Compost Management & Quality Standards**:
+  * **Moisture Management**: The Agronomic Squeeze "Fist Test" with diagnostic indicators (Too Dry, Optimal 50-60%, Waterlogged Anaerobic).
+  * **Thermophilic Temperature Curve**: Phase 1 Mesophilic ($25\text{--}40^\circ\text{C}$), Phase 2 Thermophilic ($55\text{--}65^\circ\text{C}$ for pathogen/weed seed pasteurization), Phase 3 Cooling, and Phase 4 Curing.
+  * **Maturity & Phytotoxicity Tests**: Earthy forest aroma, dark brown crumble, and cress seed germination bioassay ($>85\%$ germination).
+
+### 12. 💧 FAO-56 Irrigation Water Requirement & Soil/Water EC-pH Harmonizer
+* **FAO-56 Penman-Monteith Evapotranspiration Engine**:
+  * Calculates Crop Evapotranspiration: $\text{ET}_c = \text{ET}_0 \times K_c$
+  * Factors in effective rainfall: $\text{Net Irrigation} = \max(0, \text{ET}_c - \text{Rainfall}_{\text{eff}})$
+  * Supports 11 crops across 4 phenological growth stages (Initial, Crop Development, Mid-Season Peak, Late Season/Harvest).
+* **Leaching Fraction (LF) & Salinity Control**:
+  * Evaluates water salinity ($\text{EC}_w$) and soil salinity ($\text{EC}_e$).
+  * Calculates required leaching fraction using the FAO-29 / Rhoades equation:
+    $$\text{LF} = \frac{\text{EC}_w}{5 \times \text{EC}_e - \text{EC}_w}$$
+  * Adjusts Gross Water Requirement for system application efficiency:
+    $$\text{Gross Depth (mm/day)} = \frac{\text{Net Irrigation}}{\text{Efficiency} \times (1 - \text{LF})}$$
+* **Volumetric Water Deliveries**:
+  * Displays Gross Volume in $\text{m}^3/\text{ha}/\text{day}$, $\text{m}^3/\text{acre}/\text{day}$, and precise **Liters per plant per day** tailored to crop plant density.
+  * Recommends optimal irrigation intervals (days) based on soil texture Available Water Capacity (AWC) and root zone depletion fractions ($p$).
+* **Soil & Irrigation Water pH Interaction Matrix**:
+  * Highlights nutrient availability locks at acid ($<5.5$), optimal ($6.0\text{--}6.8$), and alkaline ($>7.5$) ranges.
+  * **Water Acidification Dosing Calculator**: Computes exact milliliters of **Phosphoric Acid 85%**, **Nitric Acid 68%**, or grams of **Citric Acid** needed per $1,000\text{ Liters}$ of water to neutralize excess bicarbonates ($\text{HCO}_3^-$) and bring pH to optimal $5.8\text{--}6.2$.
+
+### 13. 🥗 Comprehensive Phenological Crop Feeding Regimes & Drip Fertigation Schedules
+* **Complete Nutrient Demand per Metric Ton**:
+  * Exact kg of $\text{N}, \text{P}_2\text{O}_5, \text{K}_2\text{O}, \text{CaO}, \text{MgO}, \text{S}$, and micronutrients consumed per metric ton of harvest.
+* **Phenological Split Feeding Stages**:
+  * Stage 1: **Basal / Planting** (Root development with high P, mycorrhizal inoculation)
+  * Stage 2: **Vegetative Establishment** (Canopy and leaf area index with balanced N and micronutrients)
+  * Stage 3: **Flowering & Fruit Set** (Pollen viability, blossom-end rot prevention with Boron and chelated Calcium)
+  * Stage 4: **Fruit Bulking & Tuber Filling** (Potassium-driven sugar translocation and starch synthesis)
+  * Stage 5: **Maturity & Post-Harvest Reconditioning** (Ripening, brix accumulation, hardening)
+* **Drip Fertigation & Foliar Booster Recipes**:
+  * Weekly fertigation injection formulas ($\text{g/plant/week}$ and $\text{kg/ha/week}$).
+  * Rootzone electrical conductivity target ranges ($\text{EC}$ in $\text{mS/cm}$) and pH targets.
+  * Visual symptom guides for common deficiencies and emergency corrective foliar sprays.
+
 ---
 
 ## 🛠️ Architecture & Tech Stack

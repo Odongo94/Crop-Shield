@@ -143,5 +143,66 @@ class ExampleUnitTest {
         assertTrue(conservationPillar.engineeringStructures.isNotEmpty())
         assertTrue(conservationPillar.biologicalMeasures.isNotEmpty())
     }
+
+    @Test
+    fun cecRebalanceCalculator_computesCorrectCecAndRatios() {
+        // Sample soil lab test: Ca=10.0, Mg=2.0, K=0.5, Na=0.2, Acidity=1.3 => Total CEC = 14.0 meq/100g
+        val result = com.example.data.soil.CecRebalanceCalculator.calculateFromLabCations(
+            calciumMeq = 10.0,
+            magnesiumMeq = 2.0,
+            potassiumMeq = 0.5,
+            sodiumMeq = 0.2,
+            exchangeableAcidityMeq = 1.3,
+            soilPh = 6.0
+        )
+
+        assertEquals(14.0, result.totalCec, 0.01)
+        assertEquals(com.example.model.soil.CecRatingCategory.MODERATE, result.rating)
+        // Base Saturation = (12.7 / 14.0) * 100 = 90.71%
+        assertEquals(90.71, result.baseSaturationPercent, 0.1)
+        // Calcium Saturation = (10.0 / 14.0) * 100 = 71.43%
+        assertEquals(71.43, result.caSaturationPercent, 0.1)
+        // Ca:Mg ratio = 10.0 / 2.0 = 5.0
+        assertEquals(5.0, result.caToMgRatio, 0.01)
+        assertTrue(result.stepByStepDerivations.isNotEmpty())
+    }
+
+    @Test
+    fun organicManureCalculator_calculatesCorrectTonnageAndNutrients() {
+        val maizeSpec = com.example.data.soil.OrganicManureCatalog.cropManureSpecs.first { it.cropId == "crop_maize" }
+        val result = com.example.data.soil.OrganicManureCatalog.calculateTonnage(
+            cropSpec = maizeSpec,
+            manureType = com.example.model.soil.ManureType.COW_FARMYARD,
+            areaHectares = 1.0
+        )
+
+        // Verify positive tonnage and bags
+        assertTrue(result.totalTonsRequiredHectare > 0.0)
+        assertTrue(result.total50kgBagsHectare > 0)
+        assertTrue(result.availableNSuppliedKgHa > 0.0)
+        assertTrue(result.calculationSteps.isNotEmpty())
+    }
+
+    @Test
+    fun irrigationCalculator_computesCorrectEtcAndLeachingFraction() {
+        val tomato = com.example.data.soil.IrrigationWaterCatalog.crops.first { it.id == "irrig_tomato" }
+        val result = com.example.data.soil.IrrigationWaterCatalog.calculateIrrigationRequirement(
+            crop = tomato,
+            growthStage = com.example.model.soil.CropGrowthStage.MID_SEASON,
+            referenceET0MmDay = 5.0,
+            effectiveRainfallMmDay = 0.0,
+            irrigationMethod = com.example.model.soil.IrrigationMethod.DRIP_LINE,
+            soilECe = 2.0,
+            waterECw = 0.8
+        )
+
+        // ETc = 5.0 * 1.15 = 5.75 mm/day
+        assertEquals(5.75, result.cropEvapotranspirationETcMmDay, 0.01)
+        // Gross depth > ETc due to leaching fraction and 90% efficiency
+        assertTrue(result.grossIrrigationDepthMmDay > result.cropEvapotranspirationETcMmDay)
+        assertTrue(result.grossVolumeM3PerHaPerDay > 0.0)
+        assertTrue(result.litersPerPlantPerDay > 0.0)
+        assertTrue(result.stepByStepMathFormulas.isNotEmpty())
+    }
 }
 

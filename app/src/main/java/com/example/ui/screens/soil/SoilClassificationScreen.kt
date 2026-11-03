@@ -54,6 +54,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -82,7 +83,10 @@ import kotlin.math.roundToInt
 
 enum class SoilScreenTab(val title: String, val icon: ImageVector) {
     CALCULATOR("Texture Triangle", Icons.Default.Terrain),
-    ADVISORY("Crop & Soil Advice", Icons.Default.Agriculture),
+    CEC_CALCULATOR("CEC & Balance", Icons.Default.Science),
+    MANURE_CALC("Organic Manure", Icons.Default.Eco),
+    IRRIGATION_EC_PH("Irrigation & EC/pH", Icons.Default.WaterDrop),
+    ADVISORY("Crop Advice", Icons.Default.Agriculture),
     ROTATION("Rotation Designer", Icons.Default.Loop)
 }
 
@@ -128,10 +132,11 @@ fun SoilClassificationScreen(
             .testTag("soil_classification_screen")
     ) {
         // Top Navigation Tabs
-        PrimaryTabRow(
+        ScrollableTabRow(
             selectedTabIndex = activeTab.ordinal,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.primary,
+            edgePadding = 8.dp,
             modifier = Modifier.fillMaxWidth().testTag("soil_screen_tab_row")
         ) {
             SoilScreenTab.values().forEach { tab ->
@@ -157,14 +162,14 @@ fun SoilClassificationScreen(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(16.dp)
-        ) {
-            when (activeTab) {
-                SoilScreenTab.CALCULATOR -> {
+        when (activeTab) {
+            SoilScreenTab.CALCULATOR -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(16.dp)
+                ) {
                     // Method Selector Pill
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -297,8 +302,27 @@ fun SoilClassificationScreen(
                         }
                     }
                 }
+            }
 
-                SoilScreenTab.ADVISORY -> {
+            SoilScreenTab.CEC_CALCULATOR -> {
+                CecCalculatorView()
+            }
+
+            SoilScreenTab.MANURE_CALC -> {
+                OrganicManureMasterclassView()
+            }
+
+            SoilScreenTab.IRRIGATION_EC_PH -> {
+                IrrigationRequirementCalculatorView()
+            }
+
+            SoilScreenTab.ADVISORY -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(16.dp)
+                ) {
                     // Top banner with current soil class
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -381,8 +405,15 @@ fun SoilClassificationScreen(
                         Text("Design Crop Rotation Pattern for this Soil")
                     }
                 }
+            }
 
-                SoilScreenTab.ROTATION -> {
+            SoilScreenTab.ROTATION -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(16.dp)
+                ) {
                     // Interactive Crop Rotation Pattern Designer
                     CropRotationDesignerComponent()
                 }

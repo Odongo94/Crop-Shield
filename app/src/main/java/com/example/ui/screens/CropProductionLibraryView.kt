@@ -69,7 +69,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -96,13 +98,21 @@ import com.example.model.CropPostHarvestGuide
 import com.example.model.CropProductionProfile
 import com.example.model.ProductionStageGuide
 import com.example.model.StageFertilizerApplication
+import com.example.ui.screens.soil.IrrigationRequirementCalculatorView
 
-@OptIn(ExperimentalLayoutApi::class)
+enum class CropLibraryMode(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    PRODUCTION_GUIDES("Crop Guides", Icons.Default.MenuBook),
+    FEEDING_REGIMES("Feeding Regimes", Icons.Default.Agriculture),
+    IRRIGATION_REGIMES("Irrigation & EC/pH", Icons.Default.WaterDrop)
+}
+
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun CropProductionLibraryView(
     onCalculateFertilizer: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var activeLibraryMode by remember { mutableStateOf(CropLibraryMode.PRODUCTION_GUIDES) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(CropCategory.ALL) }
     var expandedCropId by remember { mutableStateOf<String?>("crop_maize") }
@@ -116,11 +126,31 @@ fun CropProductionLibraryView(
             .fillMaxSize()
             .testTag("crop_production_library_view")
     ) {
-        // Search Bar & Filter Header
-        Surface(
-            tonalElevation = 2.dp,
-            modifier = Modifier.fillMaxWidth()
+        // Mode Selector Tab Row
+        PrimaryTabRow(
+            selectedTabIndex = activeLibraryMode.ordinal,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth().testTag("crop_library_mode_tabs")
         ) {
+            CropLibraryMode.values().forEach { mode ->
+                val isSelected = activeLibraryMode == mode
+                Tab(
+                    selected = isSelected,
+                    onClick = { activeLibraryMode = mode },
+                    text = { Text(mode.title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
+                    icon = { Icon(mode.icon, contentDescription = mode.title, modifier = Modifier.size(18.dp)) }
+                )
+            }
+        }
+
+        when (activeLibraryMode) {
+            CropLibraryMode.PRODUCTION_GUIDES -> {
+                // Search Bar & Filter Header
+                Surface(
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -261,10 +291,32 @@ fun CropProductionLibraryView(
                     },
                     onCalculateFertilizer = {
                         onCalculateFertilizer(crop.cropName)
+                    },
+                    onOpenFeedingRegime = {
+                        expandedCropId = crop.id
+                        activeLibraryMode = CropLibraryMode.FEEDING_REGIMES
+                    },
+                    onOpenIrrigation = {
+                        activeLibraryMode = CropLibraryMode.IRRIGATION_REGIMES
                     }
                 )
             }
         }
+    }
+
+    CropLibraryMode.FEEDING_REGIMES -> {
+        CropFeedingRegimeView(
+            modifier = Modifier.weight(1f),
+            initialCropId = expandedCropId
+        )
+    }
+
+    CropLibraryMode.IRRIGATION_REGIMES -> {
+        IrrigationRequirementCalculatorView(
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
     }
 }
 
@@ -274,7 +326,9 @@ private fun CropProductionCard(
     crop: CropProductionProfile,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
-    onCalculateFertilizer: () -> Unit
+    onCalculateFertilizer: () -> Unit,
+    onOpenFeedingRegime: () -> Unit = {},
+    onOpenIrrigation: () -> Unit = {}
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -442,6 +496,32 @@ private fun CropProductionCard(
 
                     // GOOGLE SCHOLAR SCIENTIFIC JOURNALS & PUBLICATIONS
                     CropScholarResearchCard(crop = crop)
+
+                    // Action Buttons: Feeding Regime, Irrigation & Fertilizer
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onOpenFeedingRegime,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Agriculture, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Feeding Regime", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = onOpenIrrigation,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.WaterDrop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Irrigation Budget", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
 
                     // Call-to-action button: launch Fertilizer Calculator
                     Button(
