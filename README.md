@@ -310,6 +310,71 @@ The repository includes an automated GitHub Actions CI/CD pipeline (`.github/wor
   * Rootzone electrical conductivity target ranges ($\text{EC}$ in $\text{mS/cm}$) and pH targets.
   * Visual symptom guides for common deficiencies and emergency corrective foliar sprays.
 
+### 14. 📋 Agricultural Audit Areas & Daily Field Compliance Hub
+* **International & Kenyan Audit Standards**:
+  * **GlobalG.A.P. IFA v6** (Smart & GFS scopes for fresh produce and floriculture exports).
+  * **KS 1758 Kenya Horticulture Code of Practice** (Part 1: Flowers & Ornamentals; Part 2: Fruits & Vegetables).
+  * **Rainforest Alliance Sustainable Agriculture Standard** & **Fairtrade International**.
+  * **HACCP & ISO 22000 Food Safety Management** (Critical Control Points CCPs).
+  * **PCPB Statutory Agrochemical Compliance & OSHA 2007** (Class II/III chemical handling).
+* **Granular Field Verification Protocols**:
+  * **MRL & PHI Adherence**: Pre-harvest clearance protocols, multi-residue ISO 17025 screening.
+  * **Agrochemical Management**: Locked, ventilated storage, 110% bunding, emergency eyewash stations, and the 3-step pressure **triple-rinsing & puncturing protocol** for empty pesticide containers.
+  * **Worker Health & Safety**: Free certified PPE, annual blood cholinesterase monitoring, potable drinking water, and field sanitation latrines within 500m.
+  * **Traceability & Mock Recalls**: Forward/backward traceability within 4 hours, batch crate numbering, and annual mass balance reconciliation drills.
+  * **Environmental Conservation**: 10–30 meter mandatory riparian buffer zones prohibiting chemical spraying and tillage.
+  * **Packhouse Hygiene**: Foreign body prevention (shatterproof lighting, metal detectors), sanitizer dosing (chlorine 2–5 ppm / PAA 50–80 ppm), and cold-room temperature controls ($2\text{--}4^\circ\text{C}$).
+* **Interactive Self-Assessment Scorecard**: Instant scoring showing compliance percentage, Critical Major Musts status, and Corrective Action Plan (CAPA) guidance.
+
+### 15. 🚨 Regulated Quarantine Pests & Biosecurity Hub
+* **Official Regulatory Registers**: Curated from IPPC ISPM, European Union Regulation 2019/2072 Annex II, EPPO A1/A2 Priority Lists, and KEPHIS export surveillance standards.
+* **Key Quarantine Organisms Covered**:
+  * **False Codling Moth** (*Thaumatotibia leucotreta* - FCM): Zero-tolerance EU export quarantine threat on cut roses, *Capsicum*, citrus, and avocado.
+  * **Oriental Fruit Fly** (*Bactrocera dorsalis*): Invasive polyphagous fruit fly causing severe trade embargoes across mangoes, citrus, and avocados.
+  * **Bacterial Wilt / Brown Rot** (*Ralstonia solanacearum* Race 3 Biovar 2): Cold-tolerant soil-borne bacterium on potatoes and tomatoes (EPPO A2 / USDA Select Agent).
+  * **Potato Cyst Nematodes** (*Globodera rostochiensis* & *G. pallida* - PCN): Soil cysts viable for 20+ years causing up to 80% potato yield loss in Kenya highlands.
+  * **Khapra Beetle** (*Trogoderma granarium*): World's worst invasive stored grain beetle surviving 8 years in larval diapause.
+  * **Xylella fastidiosa**: Lethal xylem-clogging bacterium causing Olive Quick Decline and Pierce's disease.
+* **Complete Scientific Monograph per Quarantine Pest**:
+  * Official regulatory jurisdictions & international quarantine listing rationale.
+  * Biology, morphological identification, and thermal degree-days.
+  * Granular life cycle breakdown (Egg, Larval instars, Pupal cocoon/soil stage, Adult).
+  * Nature of damage and diagnostic visual symptoms.
+  * **Pre-Harvest Biosecurity Controls**: Male Annihilation Technique (MAT), pheromone traps, sterile insect release (SIT).
+  * **Post-Harvest Phytosanitary Treatments**: EU Cold Treatment ($1.1^\circ\text{C}$ to $2.2^\circ\text{C}$ for 16–22 days), Vapor Heat Treatment ($46.5^\circ\text{C}$ for 30 min), methyl bromide/phosphine fumigation, and KEPHIS phytosanitary certification.
+
+### 16. 🎯 Spray Nozzle Discharge, Pressure & Spray Time Calibration Calculator
+* **ISO 10625 Color-Coded Nozzle Database**:
+  * Standard sizes: 01 Orange, 015 Green, 02 Yellow, 025 Lilac, 03 Blue, 04 Red, 05 Brown, 06 Gray, 08 White, 10 Light Blue.
+  * Nozzle spray patterns: Standard Flat Fan ($110^\circ/80^\circ$), Air Induction Low Drift (AI), Hollow Cone, and Flood Deflector.
+* **Physical Fluid Flow Rate Equations**:
+  * Nominal discharge calculated from pressure: $q = q_0 \times \sqrt{P / 3.0\text{ bar}}$
+  * Discharge in **Liters per minute (L/min)** and **Liters per hour (L/h)**.
+  * Total volume discharged for user-specified **minutes** ($V_{\text{min}}$) and **hours** ($V_{\text{hr}}$).
+* **Pressure Discharge Matrix Table**:
+  * Interactive comparison table displaying discharge across standard pressures ($1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0\text{ bar}$) with minutes and hours volume and tank emptying times.
+* **Field Spray Time & Coverage**:
+  * Application rate in $\text{L/ha}$ and $\text{L/acre}$ based on forward speed and boom swath width.
+  * Exact minutes and hours required to spray 1 Hectare and 1 Acre.
+  * Minutes to empty 16L and 20L knapsack tanks.
+* **Nozzle Orifice Wear Calibration Test**:
+  * 60-second measuring cylinder bucket check.
+  * Evaluates percentage orifice wear ($\% \text{Wear} = \frac{V_{\text{meas}} - V_{\text{nom}}}{V_{\text{nom}}} \times 100\%$).
+  * Warns if wear exceeds $+10\%$ to prevent chemical overdosing and crop damage.
+
+### 17. 🐔 Comprehensive Poultry Management Suite
+* **Chronological Chick Vaccination Calendar (Day 1 to Adult)**:
+  * Covers **Marek's Disease**, **Newcastle Disease** (HB1 & LaSota), **Infectious Bronchitis** (IB), **Infectious Bursal Disease / Gumboro** (Intermediate & Intermediate Plus), **Fowl Pox**, **Fowl Typhoid** (9R), **Internal Worms**, **Infectious Coryza**, and **Egg Drop Syndrome (EDS-76)**.
+  * Granular administration routes: Eye Drop, Drinking Water, Wing Web Stab, Subcutaneous, Intramuscular, Coarse Spray.
+  * **Vaccine Reconstitution SOP**: Non-fat skimmed milk powder ($2.5\text{ g/L}$) for chlorine neutralization, $1.5\text{--}2\text{ hr}$ water starvation, and strict cold-chain maintenance ($2\text{--}8^\circ\text{C}$).
+* **Age-Stratified Precision Feeding Programs**:
+  * Dedicated programs for **Commercial Layers**, **Commercial Broilers**, and **Improved Kienyeji** (KARI / Kuroiler / Sasso).
+  * Complete nutritional profiles: Crude Protein (CP %), Metabolizable Energy (ME kcal/kg), Calcium %, Available Phosphorus %, Lysine %, Methionine %.
+  * Daily feed intake per bird (g/bird/day), cumulative feed, daily water requirement ($2\text{--}2.5\times$ feed intake).
+  * Brooding temperature target curve ($33\text{--}35^\circ\text{C}$ stepping down by $2\text{--}3^\circ\text{C}$ weekly to $21^\circ\text{C}$) and lighting programs.
+* **Interactive Daily Flock Planner**:
+  * Input flock size (birds) and age (days) to calculate total daily feed (kg and 50 kg bags), water requirements (L), and upcoming vaccination alerts due in the next 7 days.
+
 ---
 
 ## 🛠️ Architecture & Tech Stack

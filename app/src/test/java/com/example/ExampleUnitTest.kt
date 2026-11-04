@@ -204,5 +204,111 @@ class ExampleUnitTest {
         assertTrue(result.litersPerPlantPerDay > 0.0)
         assertTrue(result.stepByStepMathFormulas.isNotEmpty())
     }
+
+    @Test
+    fun nozzleCalibrationCalculator_computesCorrectFlowRateAndTable() {
+        val yellowNozzle = com.example.model.spray.IsoNozzleColor.YELLOW_02 // 0.80 L/min at 3.0 bar
+        // At 3.0 bar, single flow rate must equal 0.80 L/min exactly
+        val flowAt3Bar = com.example.data.spray.NozzleCalibrationCalculator.calculateFlowRate(yellowNozzle, 3.0)
+        assertEquals(0.80, flowAt3Bar, 0.001)
+
+        // At 4.0 bar, q = 0.80 * sqrt(4.0 / 3.0) = 0.92376 L/min
+        val flowAt4Bar = com.example.data.spray.NozzleCalibrationCalculator.calculateFlowRate(yellowNozzle, 4.0)
+        assertEquals(0.9238, flowAt4Bar, 0.002)
+
+        val fullResult = com.example.data.spray.NozzleCalibrationCalculator.calculateCompleteNozzleDischarge(
+            nozzle = yellowNozzle,
+            selectedPressureBars = 3.0,
+            customDurationMinutes = 15.0,
+            customDurationHours = 1.0,
+            numberOfNozzlesOnBoom = 1,
+            walkingSpeedKmH = 4.0,
+            nozzleSpacingMeters = 0.50
+        )
+
+        // In 15 minutes: 0.80 * 15 = 12.0 Liters
+        assertEquals(12.0, fullResult.volumeInMinutesLiters, 0.01)
+        // In 1 hour: 0.80 * 60 = 48.0 Liters
+        assertEquals(48.0, fullResult.volumeInHoursLiters, 0.01)
+        // Table must contain 7 standard pressure rows
+        assertEquals(7, fullResult.dischargeTable.size)
+        // Application rate L/ha = (0.80 * 600) / (4.0 * 0.5) = 240.0 L/ha
+        assertEquals(240.0, fullResult.applicationRateLitersPerHectare, 0.1)
+
+        // Wear test: 880 ml in 1 min against nominal 800 ml = +10.0%
+        val wearCheck = com.example.data.spray.NozzleCalibrationCalculator.checkNozzleWear(yellowNozzle, 3.0, 920.0)
+        assertTrue(wearCheck.isWorn)
+        assertTrue(wearCheck.differencePercent > 10.0)
+    }
+
+    @Test
+    fun agriculturalAuditCatalog_evaluatesComplianceAndScore() {
+        val protocols = com.example.data.compliance.AgriculturalAuditCatalog.auditProtocols
+        assertTrue("Must contain compliance protocols", protocols.size >= 8)
+
+        val hasGlobalGap = protocols.any { it.standard == com.example.model.compliance.AuditStandard.GLOBAL_GAP_IFA }
+        val hasKs1758 = protocols.any { it.standard == com.example.model.compliance.AuditStandard.KS_1758_KENYA }
+        val hasPcpb = protocols.any { it.standard == com.example.model.compliance.AuditStandard.PCPB_STATUTORY_KENYA }
+        assertTrue(hasGlobalGap)
+        assertTrue(hasKs1758)
+        assertTrue(hasPcpb)
+
+        // Test scoring with 0 checked (failed)
+        val scoreZero = com.example.data.compliance.AgriculturalAuditCatalog.evaluateAuditCompliance(emptySet())
+        assertFalse(scoreZero.passStatus)
+        assertTrue(scoreZero.criticalFailureCount > 0)
+
+        // Test scoring with all checked (passed)
+        val allIds = protocols.map { it.id }.toSet()
+        val scoreAll = com.example.data.compliance.AgriculturalAuditCatalog.evaluateAuditCompliance(allIds)
+        assertTrue(scoreAll.passStatus)
+        assertEquals(100.0, scoreAll.compliancePercentage, 0.01)
+        assertEquals(0, scoreAll.criticalFailureCount)
+    }
+
+    @Test
+    fun quarantinePestCatalog_containsKeyInternationalPestsAndKephisProtocols() {
+        val pests = com.example.data.quarantine.QuarantinePestCatalog.quarantinePests
+        assertTrue("Must contain quarantine pests", pests.size >= 5)
+
+        val fcm = com.example.data.quarantine.QuarantinePestCatalog.getPestById("qp_fcm")
+        assertNotNull("FCM must exist", fcm)
+        assertTrue(fcm!!.targetCropsAndHosts.any { it.contains("Roses", ignoreCase = true) })
+        assertTrue(fcm.postHarvestPhytosanitaryTreatments.any { it.contains("Cold Treatment", ignoreCase = true) })
+        assertTrue(fcm.lifeCycleStages.isNotEmpty())
+
+        val bactrocera = com.example.data.quarantine.QuarantinePestCatalog.getPestById("qp_bactrocera")
+        assertNotNull("Bactrocera must exist", bactrocera)
+        assertTrue(bactrocera!!.targetCropsAndHosts.any { it.contains("Mango", ignoreCase = true) })
+        assertTrue(bactrocera.postHarvestPhytosanitaryTreatments.any { it.contains("Vapor Heat", ignoreCase = true) })
+
+        val pcn = com.example.data.quarantine.QuarantinePestCatalog.getPestById("qp_pcn")
+        assertNotNull("PCN must exist", pcn)
+        assertTrue(pcn!!.targetCropsAndHosts.any { it.contains("Potato", ignoreCase = true) })
+    }
+
+    @Test
+    fun poultryManagementCatalog_calculatesCorrectFeedWaterAndUpcomingVaccines() {
+        val vaccines = com.example.data.poultry.PoultryManagementCatalog.vaccinationSchedule
+        assertTrue("Must contain vaccines", vaccines.size >= 10)
+        assertTrue(vaccines.any { it.targetDisease.contains("Marek", ignoreCase = true) })
+        assertTrue(vaccines.any { it.targetDisease.contains("Gumboro", ignoreCase = true) })
+        assertTrue(vaccines.any { it.targetDisease.contains("Newcastle", ignoreCase = true) })
+
+        // Test calculation for 500 layers at Day 14
+        val plan = com.example.data.poultry.PoultryManagementCatalog.calculateDailyFlockPlan(
+            flockType = com.example.model.poultry.PoultryFlockType.LAYERS,
+            flockSizeBirds = 500,
+            ageDays = 14
+        )
+
+        assertEquals(500, plan.flockSizeBirds)
+        assertEquals(14, plan.ageDays)
+        assertTrue(plan.dailyFeedTotalKg > 0.0)
+        assertTrue(plan.dailyWaterRequiredLiters > 0.0)
+        assertTrue(plan.currentBroodingTemperature.isNotEmpty())
+        // At day 14, Gumboro 1st dose is due
+        assertTrue(plan.upcomingVaccinesNext7Days.any { it.targetDisease.contains("Gumboro", ignoreCase = true) })
+    }
 }
 

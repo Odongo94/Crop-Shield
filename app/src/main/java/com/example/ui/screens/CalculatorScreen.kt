@@ -73,10 +73,13 @@ import com.example.model.KnapsackFertilizerResult
 import com.example.ui.components.ChemicalFormulationType
 import com.example.ui.components.KnapsackCalculatorComponent
 
+import androidx.compose.material3.ScrollableTabRow
+
 enum class CalculatorMode(val title: String) {
     FERTILIZER("Knapsack Fertilizer"),
     PESTICIDE("Pesticide Dilution"),
-    SOIL_CLASSIFIER("Soil Classification")
+    SOIL_CLASSIFIER("Soil Classification"),
+    NOZZLE_DISCHARGE("Nozzle Discharge & Time")
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -108,8 +111,9 @@ fun CalculatorScreen(
 
     Column(modifier = modifier.fillMaxSize().testTag("calculator_screen")) {
         // Tab Row Switcher
-        PrimaryTabRow(
+        ScrollableTabRow(
             selectedTabIndex = activeMode.ordinal,
+            edgePadding = 8.dp,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier.fillMaxWidth().testTag("calculator_tab_row")
@@ -131,6 +135,7 @@ fun CalculatorScreen(
                                 CalculatorMode.FERTILIZER -> Icons.Default.Agriculture
                                 CalculatorMode.PESTICIDE -> Icons.Default.Medication
                                 CalculatorMode.SOIL_CLASSIFIER -> Icons.Default.Terrain
+                                CalculatorMode.NOZZLE_DISCHARGE -> Icons.Default.Speed
                             },
                             contentDescription = mode.title,
                             modifier = Modifier.size(20.dp)
@@ -167,6 +172,10 @@ fun CalculatorScreen(
 
             CalculatorMode.SOIL_CLASSIFIER -> {
                 com.example.ui.screens.soil.SoilClassificationScreen()
+            }
+
+            CalculatorMode.NOZZLE_DISCHARGE -> {
+                com.example.ui.screens.spray.NozzleDischargeCalculatorView()
             }
         }
     }

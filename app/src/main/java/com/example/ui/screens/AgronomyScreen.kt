@@ -116,10 +116,18 @@ import com.example.model.WeedModel
 import com.example.model.WeedType
 import com.example.viewmodel.WeatherUiState
 
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Egg
+import androidx.compose.material3.ScrollableTabRow
+
 enum class AgronomySubTab(val title: String, val icon: ImageVector) {
     CROP_GUIDES("Crop Library", Icons.Default.MenuBook),
     WEED_SOIL("Weed & Soil", Icons.Default.Grass),
     SCIENCES("Agri-Science", Icons.Default.Science),
+    AUDIT_COMPLIANCE("Audits & Compliance", Icons.Default.HealthAndSafety),
+    QUARANTINE_PESTS("Quarantine Biosecurity", Icons.Default.Security),
+    POULTRY_SUITE("Poultry Manager", Icons.Default.Egg),
     FERTILIZER("Fertilizer Calc", Icons.Default.Agriculture),
     WEATHER("Farm Weather", Icons.Default.Cloud)
 }
@@ -157,8 +165,9 @@ fun AgronomyScreen(
             .testTag("agronomy_screen")
     ) {
         // Sub-navigation tabs
-        PrimaryTabRow(
+        ScrollableTabRow(
             selectedTabIndex = activeTab.ordinal,
+            edgePadding = 8.dp,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier.fillMaxWidth().testTag("agronomy_tab_row")
@@ -278,6 +287,18 @@ fun AgronomyScreen(
                     onTopdressProductSelected = onTopdressProductSelected,
                     onNavigateToFieldMap = onNavigateToFieldMap
                 )
+            }
+
+            AgronomySubTab.AUDIT_COMPLIANCE -> {
+                com.example.ui.screens.compliance.AgriculturalAuditComplianceView()
+            }
+
+            AgronomySubTab.QUARANTINE_PESTS -> {
+                com.example.ui.screens.quarantine.QuarantinePestBiosecurityView()
+            }
+
+            AgronomySubTab.POULTRY_SUITE -> {
+                com.example.ui.screens.poultry.PoultryManagerView()
             }
 
             AgronomySubTab.WEATHER -> {
