@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -144,6 +146,8 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                 AppScreen.FIELD_NOTES -> "Field Agronomy Notebook"
                                 AppScreen.SCOUT_LOG -> "Field Scouting Logs"
                                 AppScreen.SCOUTING_SHEETS -> "Scouting Sheets & Protocols"
+                                AppScreen.AI_AGRONOMIST -> "Ask AI Agronomist"
+                                AppScreen.BIOSCIENCE_SKILLS -> "Bioscience Skills & Web Apps"
                                 AppScreen.THREAT_DETAIL -> ""
                             },
                             style = MaterialTheme.typography.titleMedium,
@@ -151,7 +155,31 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                         )
                     },
                     actions = {
-                        // 1. Universal Search Action (Search disease, pest, weed, crop)
+                        // 0. Bioscience Skills Action Button (Flask Icon)
+                        IconButton(
+                            onClick = { viewModel.navigateTo(AppScreen.BIOSCIENCE_SKILLS) },
+                            modifier = Modifier.testTag("action_open_bioscience_skills")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Science,
+                                contentDescription = "Bioscience Skills with Flask Icon",
+                                tint = if (currentScreen == AppScreen.BIOSCIENCE_SKILLS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // 1. AI Agronomist Action Button
+                        IconButton(
+                            onClick = { viewModel.navigateTo(AppScreen.AI_AGRONOMIST) },
+                            modifier = Modifier.testTag("action_open_ai_agronomist")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = "Ask AI Agronomist",
+                                tint = if (currentScreen == AppScreen.AI_AGRONOMIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // 2. Universal Search Action (Search disease, pest, weed, crop)
                         IconButton(
                             onClick = { viewModel.openGlobalSearch() },
                             modifier = Modifier.testTag("action_global_search")
@@ -527,6 +555,25 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onNavigateToCalculator = { t, c -> viewModel.openCalculator(t, c) },
                             onAddScoutLog = { t -> viewModel.openAddScout(t) },
                             onAddFieldNote = { crop, pest -> viewModel.openFieldNotes(crop, pest) }
+                        )
+                    }
+
+                    AppScreen.AI_AGRONOMIST -> {
+                        com.example.ui.screens.ai.AiAgronomistScreen(
+                            onNavigateToCalculator = { screenCode ->
+                                when (screenCode) {
+                                    "SOIL_CALCULATOR" -> viewModel.navigateTo(AppScreen.SOIL_CALCULATOR)
+                                    "CALCULATOR", "NOZZLE" -> viewModel.navigateTo(AppScreen.CALCULATOR)
+                                    "POULTRY", "AUDIT" -> viewModel.navigateTo(AppScreen.AGRONOMY)
+                                    else -> viewModel.navigateTo(AppScreen.CALCULATOR)
+                                }
+                            }
+                        )
+                    }
+
+                    AppScreen.BIOSCIENCE_SKILLS -> {
+                        com.example.ui.screens.science.BioscienceSkillsScreen(
+                            onNavigateBack = { viewModel.navigateBack() }
                         )
                     }
                 }

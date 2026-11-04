@@ -119,9 +119,12 @@ import com.example.viewmodel.WeatherUiState
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Egg
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.ScrollableTabRow
 
 enum class AgronomySubTab(val title: String, val icon: ImageVector) {
+    AI_ADVISORY("Ask AI", Icons.Default.Psychology),
+    BIOSCIENCE_SKILLS("Bioscience Skills", Icons.Default.Science),
     CROP_GUIDES("Crop Library", Icons.Default.MenuBook),
     WEED_SOIL("Weed & Soil", Icons.Default.Grass),
     SCIENCES("Agri-Science", Icons.Default.Science),
@@ -197,6 +200,14 @@ fun AgronomyScreen(
         }
 
         when (activeTab) {
+            AgronomySubTab.AI_ADVISORY -> {
+                com.example.ui.screens.ai.AiAgronomistScreen()
+            }
+
+            AgronomySubTab.BIOSCIENCE_SKILLS -> {
+                com.example.ui.screens.science.BioscienceSkillsScreen()
+            }
+
             AgronomySubTab.CROP_GUIDES -> {
                 CropProductionLibraryView(
                     onCalculateFertilizer = { cropName ->

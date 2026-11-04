@@ -53,7 +53,9 @@ enum class AppScreen {
     FIELD_NOTES,
     SCOUT_LOG,
     SCOUTING_SHEETS,
-    THREAT_DETAIL
+    THREAT_DETAIL,
+    AI_AGRONOMIST,
+    BIOSCIENCE_SKILLS
 }
 
 sealed class WeatherUiState {

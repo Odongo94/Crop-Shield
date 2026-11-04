@@ -375,6 +375,54 @@ The repository includes an automated GitHub Actions CI/CD pipeline (`.github/wor
 * **Interactive Daily Flock Planner**:
   * Input flock size (birds) and age (days) to calculate total daily feed (kg and 50 kg bags), water requirements (L), and upcoming vaccination alerts due in the next 7 days.
 
+### 18. 🤖 Shamba AI Agronomist (Real-Time AI Q&A Assistant)
+* **Dual-Mode AI Architecture (Online + Resilient Offline Knowledge Engine)**:
+  * **Online Mode**: Communicates directly with **Google Gemini 2.5 Flash** (`gemini-2.5-flash:generateContent`) via secure server-side API keys (`BuildConfig.GEMINI_API_KEY`).
+  * **Offline Mode**: A built-in agricultural knowledge base and heuristic classifier providing rich, structured agronomic prescriptions for field inquiries even when entirely off-grid without mobile network coverage.
+* **Specialized Agronomic Domain Coverage**:
+  * **Crop Protection & Pathology**: Late Blight (*Phytophthora infestans*), Fall Armyworm, Tuta absoluta, Aphids, Spider Mites, Bacterial Wilt, and Quarantine biosecurity alerts.
+  * **Soil Fertility & Conditioning**: Cation Exchange Capacity (CEC) interpretation, base saturation balancing, acidic soil liming (calcitic lime & agricultural gypsum), and composting C:N ratio formulas.
+  * **Irrigation & Crop Water Demands**: Crop evapotranspiration calculations ($ET_c = ET_0 \times K_c$), leaching fractions ($LF$), and water salinity electrical conductivity thresholds ($EC_w$).
+  * **Spray Application Calibration**: ISO standard nozzle color codes, flow rate math ($q = q_0 \sqrt{P/3}$), pressure adjustments, and tank emptying intervals.
+  * **Poultry Health & Nutrition**: Chronological vaccination timelines, chick feed intake trajectories, and drinking water vaccine reconstitution SOPs.
+* **Interactive Field Interface**:
+  * Pre-configured quick-prompt chips spanning Pests, Diseases, Soil & CEC, Irrigation, Poultry, Spray Calibration, and Composting.
+  * Interactive follow-up question chips generated dynamically based on context.
+  * 1-tap copy of recommendations to clipboard for sharing with farmers via SMS/WhatsApp.
+  * Contextual shortcut buttons navigating directly to internal calculators (Nozzle Calibrator, Soil CEC & Texture Triangle, Poultry Flock Planner).
+  * Clear visual badges displaying connection mode (`Gemini 2.5 Flash • Live AI` vs. `Offline Agronomic Base`).
+
+### 19. ⚗️ Bioscience Skills & Scientific Web Applications (Flask Icon)
+* **Building Scientific Web Applications**:
+  * Production blueprints and architecture recipes for deploying reactive Python/TypeScript scientific web tools.
+  * **Streamlit & py3Dmol / Mol***: Real-time 3D macromolecular structures with WebGL cartoon, surface, and ligand-pocket rendering.
+  * **FastAPI Microservices**: Asynchronous BLAST+ pairwise/multiple sequence alignment APIs with Pydantic validation and Celery task queues.
+  * **RDKit Agrochemical Dashboards**: SMILES parsing, 2D structure depiction, Lipinski Rule of 5 evaluation, and pesticide environmental fate modeling.
+  * **Biological Data Pipelines (ETL)**: Programmatic extraction from NCBI Entrez, UniProt KB, and PubChem PUG REST with rate limiting and local SQLite caching.
+* **Bioinformatics & Computational Genomics**:
+  * Dynamic programming alignment algorithms (Needleman-Wunsch global and Smith-Waterman local alignment).
+  * Heuristic sequence searching (NCBI BLAST+ blastn, blastp, E-value expectation thresholds, bit scores).
+  * Next-Generation Sequencing pipelines (FASTQ quality control, BWA-MEM mapping, BAM indexing, GATK variant calling).
+  * Agricultural genomics: Marker-assisted selection, QTL mapping, and CRISPR-Cas9/Cas12 guide RNA design for crop pathogen resistance.
+* **Molecular Dynamics & Structural Biology**:
+  * Physics-based biomolecular simulations using OpenMM and GROMACS.
+  * All-atom force fields (AMBER ff14SB, CHARMM36m) and explicit solvation models (TIP3P water box with 0.15 M NaCl).
+  * Energy minimization (Steepest Descent), NVT and NPT thermodynamic equilibration ensembles.
+  * AI-predicted 3D structures via AlphaFold 2/3 and ESMFold.
+  * In silico agrochemical molecular docking with AutoDock Vina (binding affinity scoring in kcal/mol).
+* **Chemoinformatics & Computational Chemistry**:
+  * Molecular identifiers: Canonical SMILES, InChIKey, SDF, and Mol2.
+  * Lipinski Rule of Five bioavailability filters ($MW \le 500\text{ g/mol}$, $\text{LogP} \le 5.0$, $HBD \le 5$, $HBA \le 10$).
+  * Topological Polar Surface Area (TPSA) and systemic xylem translocation modeling.
+  * Chemical clustering via Morgan / ECFP4 fingerprints and Tanimoto similarity indices.
+* **Google & Scientific Search Engine**:
+  * Integrated multi-target scientific search bar launching searches directly to **Google Web**, **Google Scholar**, **PubMed Central**, **NCBI Entrez**, **PubChem**, and **RCSB Protein Data Bank**.
+  * Pre-configured search queries for trending topics in crop genomics, molecular docking, and computational biology.
+* **Gemini Bioscience AI Chatbot**:
+  * Specialized chatbot powered by **Google Gemini 2.5 Flash** with an authoritative computational biology system prompt.
+  * Interactive quick-prompt chips for code generation, docking setup, BLAST queries, and RDKit scripts.
+  * Offline scientific heuristic engine fallback providing structured code snippets and biophysical explanations.
+
 ---
 
 ## 🛠️ Architecture & Tech Stack

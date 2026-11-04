@@ -310,5 +310,106 @@ class ExampleUnitTest {
         // At day 14, Gumboro 1st dose is due
         assertTrue(plan.upcomingVaccinesNext7Days.any { it.targetDisease.contains("Gumboro", ignoreCase = true) })
     }
+
+    @Test
+    fun aiAgronomistService_quickPromptsAreComprehensive() {
+        val prompts = com.example.data.ai.AiAgronomistService.quickPrompts
+        assertTrue("Must contain quick prompts", prompts.size >= 8)
+
+        val hasPest = prompts.any { it.category == "Pest Control" }
+        val hasPoultry = prompts.any { it.category == "Poultry Health" }
+        val hasSoil = prompts.any { it.category == "Soil Fertility" }
+        val hasIrrig = prompts.any { it.category == "Irrigation Science" }
+        assertTrue(hasPest)
+        assertTrue(hasPoultry)
+        assertTrue(hasSoil)
+        assertTrue(hasIrrig)
+    }
+
+    @Test
+    fun aiAgronomistService_offlineResponsesDeliverAccuratePrescriptions() {
+        // 1. FAW Query
+        val fawResponse = com.example.data.ai.AiAgronomistService.generateOfflineAgronomicResponse("How do I control Fall Armyworm in my maize?")
+        assertTrue(fawResponse.contains("Spodoptera frugiperda"))
+        assertTrue(fawResponse.contains("Emamectin Benzoate") || fawResponse.contains("Coragen"))
+        assertTrue(fawResponse.contains("knapsack"))
+
+        // 2. Tomato Blight Query
+        val blightResponse = com.example.data.ai.AiAgronomistService.generateOfflineAgronomicResponse("How do I treat Late Blight on tomatoes?")
+        assertTrue(blightResponse.contains("Phytophthora infestans"))
+        assertTrue(blightResponse.contains("Mancozeb") || blightResponse.contains("Ridomil"))
+
+        // 3. Poultry Vaccine Query
+        val poultryResponse = com.example.data.ai.AiAgronomistService.generateOfflineAgronomicResponse("What is the vaccination schedule for chicks?")
+        assertTrue(poultryResponse.contains("Marek"))
+        assertTrue(poultryResponse.contains("Gumboro"))
+        assertTrue(poultryResponse.contains("skimmed milk"))
+
+        // 4. Soil pH Query
+        val soilResponse = com.example.data.ai.AiAgronomistService.generateOfflineAgronomicResponse("How to manage soil pH 4.8?")
+        assertTrue(soilResponse.contains("Lime") || soilResponse.contains("CaCO"))
+        assertTrue(soilResponse.contains("Albrecht") || soilResponse.contains("Aluminum"))
+    }
+
+    @Test
+    fun bioscienceSkillsCatalog_containsAllCoreDomainsAndScaffolds() {
+        val modules = com.example.data.science.BioscienceSkillsCatalog.allModules
+        assertTrue("Must contain all 5 core bioscience modules", modules.size >= 5)
+
+        val domains = modules.map { it.domain }.toSet()
+        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.WEB_APP_DEV))
+        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.BIOINFORMATICS))
+        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.MOLECULAR_DYNAMICS))
+        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.CHEMISTRY_TOOLS))
+        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.BIOLOGICAL_DATABASES))
+
+        val scaffolds = com.example.data.science.BioscienceSkillsCatalog.webAppScaffolds
+        assertTrue("Must contain web application scaffolds", scaffolds.size >= 4)
+        assertTrue(scaffolds.any { it.name.contains("Streamlit") })
+        assertTrue(scaffolds.any { it.name.contains("FastAPI") })
+        assertTrue(scaffolds.any { it.name.contains("RDKit") })
+        assertTrue(scaffolds.any { it.name.contains("PubChem") })
+    }
+
+    @Test
+    fun bioscienceSkillsCatalog_searchFiltersAccurately() {
+        val rdkitHits = com.example.data.science.BioscienceSkillsCatalog.searchModules("RDKit")
+        assertTrue(rdkitHits.isNotEmpty())
+        assertTrue(rdkitHits.any { it.title.contains("RDKit") || it.toolsAndLibraries.contains("RDKit") })
+
+        val blastHits = com.example.data.science.BioscienceSkillsCatalog.searchModules("BLAST")
+        assertTrue(blastHits.isNotEmpty())
+
+        val dynamicsModules = com.example.data.science.BioscienceSkillsCatalog.getModulesByDomain(
+            com.example.model.science.BioscienceDomain.MOLECULAR_DYNAMICS
+        )
+        assertEquals(1, dynamicsModules.size)
+        assertTrue(dynamicsModules.first().toolsAndLibraries.contains("OpenMM"))
+    }
+
+    @Test
+    fun bioscienceGeminiService_quickPromptsAndOfflineEngine() {
+        val prompts = com.example.data.ai.BioscienceGeminiService.quickPrompts
+        assertTrue("Must have bioscience quick prompts", prompts.size >= 5)
+        assertTrue(prompts.any { it.shortLabel.contains("PDB Viewer") })
+        assertTrue(prompts.any { it.shortLabel.contains("BLAST") })
+        assertTrue(prompts.any { it.shortLabel.contains("AutoDock") })
+
+        // 1. Streamlit 3D query
+        val streamlitResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("How do I build a Streamlit 3D molecule viewer web app?")
+        assertTrue(streamlitResponse.contains("Streamlit"))
+        assertTrue(streamlitResponse.contains("py3Dmol"))
+
+        // 2. BLAST alignment query
+        val blastResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("Explain Needleman-Wunsch and BLAST alignment")
+        assertTrue(blastResponse.contains("Needleman-Wunsch"))
+        assertTrue(blastResponse.contains("Biopython"))
+
+        // 3. Chemoinformatics query
+        val chemResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("How do I calculate Lipinski Rule of 5 and LogP with RDKit?")
+        assertTrue(chemResponse.contains("Lipinski"))
+        assertTrue(chemResponse.contains("RDKit"))
+        assertTrue(chemResponse.contains("TPSA"))
+    }
 }
 
