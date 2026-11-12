@@ -97,80 +97,145 @@ if pdb_id:
         ),
 
         // -------------------------------------------------------------
-        // MODULE 2: BIOINFORMATICS & GENOMICS
+        // MODULE 2: GLOBAL PEST & DISEASE IDENTIFICATION PORTALS & GUIDES
         // -------------------------------------------------------------
         BioscienceSkillModule(
-            id = "bioinfo_sequence_alignment_genomics",
-            title = "Bioinformatics: Sequence Alignment, BLAST & NGS",
-            domain = BioscienceDomain.BIOINFORMATICS,
-            summary = "Master computational sequence analysis of DNA, RNA, and proteins. Learn pairwise dynamic programming (Needleman-Wunsch, Smith-Waterman), heuristic database searching (NCBI BLAST+), and Next-Generation Sequencing pipelines.",
+            id = "global_pest_identification_portals",
+            title = "Global Pest & Disease Portals & Diagnostic Guides",
+            domain = BioscienceDomain.GLOBAL_PEST_PORTALS,
+            summary = "Comprehensive integration of 11 world-class agricultural identification portals (AHR Australia, Pests of Bhutan, CABI PlantwisePlus, Bayer CropScience ID, EPPO Quarantine A1/A2, Penn State Extension, Gardener's Supply Encyclopedia, Minnesota MDA Index, TAAT Africa, Corson Maize, and iNaturalist) plus the NUFLIP demonstration field factsheets (Solanaceae, Cucurbits, Brassicas, Alliums, physiological disorders, IRAC/FRAC classifications).",
             keyConcepts = listOf(
-                "Dynamic Programming Matrix: Global vs. Local Alignment",
-                "Substitution Scoring Matrices: PAM250 vs. BLOSUM62",
-                "BLAST+ E-value (Expectation Value) Thresholds & Bit Scores",
-                "High-Throughput NGS Pipeline: FASTQ -> BWA-MEM -> BAM -> GATK Variant Calling",
-                "Plant Genomic Phylogenetics: Maximum Likelihood & Neighbor-Joining"
+                "CABI PlantwisePlus Decision Guides (Green & Amber List Controls)",
+                "EPPO International A1/A2 Quarantine Registers & Biosecurity Alerts",
+                "AHR Australasian Field Guides for Vegetable Diseases & Pests",
+                "Penn State Extension Pathology Keys & Microscopic Spores",
+                "iNaturalist AI Computer Vision Species Observations & Geolocation",
+                "TAAT Africa Pan-African Fall Armyworm & Crop Protection Toolkits",
+                "NUFLIP JICA Uganda Vegetable Disorders (BER, Sunburn, Nutrients) & IRAC/FRAC Classes"
             ),
             toolsAndLibraries = listOf(
-                "Biopython", "NCBI BLAST+", "Clustal Omega", "BWA", "SAMtools", "GATK"
+                "CABI PlantwisePlus", "EPPO Global DB", "iNaturalist API", "Penn State Extension", "Bayer CropScience ID", "TAAT Africa", "AHR Guides"
             ),
-            webAppArchitecture = "Web GUI with file upload (FASTA/FASTQ), Celery task queue for asynchronous alignment jobs, and SVG/Canvas phylogenetic tree rendering.",
-            agriculturalRelevance = "Diagnose novel crop pathogen strains (e.g. African Cassava Mosaic Virus or Fall Armyworm biotypes) by querying sequence isolates against GenBank and identifying single-nucleotide polymorphisms (SNPs) responsible for pesticide resistance.",
+            webAppArchitecture = "Multi-database query aggregator: Frontend accepts any crop pest, weed, or disease; backend generates deep search links and REST queries to CABI, EPPO, and iNaturalist; displays side-by-side symptoms, quarantine status, and IRAC/FRAC rotation schedules.",
+            agriculturalRelevance = "Empowers agronomists, quarantine inspectors, and smallholder farmers to cross-reference local field observations against 11 global authoritative databases and certified demonstration field factsheets.",
             codeRecipe = CodeRecipe(
-                title = "Automated NCBI BLAST Sequence Query & Parser in Biopython",
+                title = "Multi-Portal Agricultural Diagnostic Deep-Search Tool in Python",
                 language = "python",
-                framework = "Biopython (Bio.Blast)",
+                framework = "Python (Requests + urllib)",
                 code = """
-from Bio.Blast import NCBIWWW, NCBIXML
-from Bio import SeqIO
+import urllib.parse
+import requests
 
-# Example: Suspected crop pathogen isolate sequence
-pathogen_dna = "ATGGCTAGCATGACTGGTGGACAGCAAATGGGTCGCGGATCCGAA"
+# 11 Authoritative Agricultural Pest & Disease Identification Portals
+PORTALS = {
+    "AHR Australia Vegetable Guides": "https://ahr.com.au/?s=",
+    "Pests of Bhutan (NPPC)": "https://pestsofbhutan.nppc.gov.bt/?s=",
+    "CABI PlantwisePlus Knowledge Bank": "https://plantwiseplusknowledgebank.org/action/doSearch?AllField=",
+    "Bayer CropScience Agronomy ID": "https://cropscience.bayer.co.uk/search?q=",
+    "EPPO Global Quarantine Database": "https://gd.eppo.int/search?k=",
+    "Penn State Extension Pest Library": "https://extension.psu.edu/search/?q=",
+    "Gardener's Supply Encyclopedia": "https://www.gardeners.com/search?q=",
+    "Minnesota MDA Pests Index": "https://www.mda.state.mn.us/search?q=",
+    "TAAT Africa Technologies": "https://e-catalogs.taat-africa.org/gov/technologies?q=",
+    "Corson Maize Pests & Diseases": "https://www.corsonmaize.co.nz/search?Search=",
+    "iNaturalist Global Biodiversity": "https://www.inaturalist.org/search?q="
+}
 
-print("Submitting blastn query to NCBI GenBank server...")
-result_handle = NCBIWWW.qblast("blastn", "nt", pathogen_dna)
+def query_global_portals(pest_or_disease: str):
+    print(f"=== Sourcing Global Knowledge for: '{pest_or_disease}' ===")
+    encoded_query = urllib.parse.quote_plus(pest_or_disease.strip())
+    results = {}
+    for name, base_url in PORTALS.items():
+        search_link = f"{base_url}{encoded_query}"
+        results[name] = search_link
+        print(f" • [{name}]: {search_link}")
+    return results
 
-# Parse output XML record
-blast_record = NCBIXML.read(result_handle)
-
-print(f"Database Searched: {blast_record.database}")
-print(f"Top Alignments Found: {len(blast_record.alignments)}\n")
-
-for alignment in blast_record.alignments[:5]:
-    for hsp in alignment.hsps:
-        print(f"Title: {alignment.title[:80]}...")
-        print(f"Length: {alignment.length} bp | Score: {hsp.score} | E-value: {hsp.expect}")
-        print(f"Query:  {hsp.query[:50]}")
-        print(f"Match:  {hsp.match[:50]}")
-        print(f"Sbjct:  {hsp.sbjct[:50]}")
-        print("-" * 60)
+# Example: Query for Fall Armyworm (Spodoptera frugiperda)
+query_global_portals("Spodoptera frugiperda")
                 """.trimIndent(),
-                explanation = "Demonstrates how to programmatically submit nucleotide queries to NCBI BLAST+ via Biopython and extract statistically significant alignment hits (E-values and bit scores)."
+                explanation = "Generates verified deep search links across all 11 premier international pest and disease knowledge bases for any plant pathogen, insect vector, or physiological disorder."
             ),
             databaseLinks = listOf(
                 ExternalScientificLink(
-                    title = "NCBI Nucleotide & GenBank Database",
-                    provider = "NCBI",
-                    url = "https://www.ncbi.nlm.nih.gov/nucleotide/",
-                    description = "The primary worldwide repository of annotated nucleotide sequences across all kingdoms of life."
+                    title = "AHR Pest & Disease Identification Guides",
+                    provider = "AHR Australia",
+                    url = "https://ahr.com.au/blog/news/pest-and-disease-identification-guides-available",
+                    description = "Field vegetable diagnostic identification guides for Brassicas, Alliums, Solanaceae, and Cucurbits."
                 ),
                 ExternalScientificLink(
-                    title = "Ensembl Plants Crop Genomics",
-                    provider = "Google Web",
-                    url = "https://plants.ensembl.org/",
-                    description = "Genomic variation, synteny, and gene models for maize, wheat, rice, tomato, and cassava."
+                    title = "Pests of Bhutan Portal",
+                    provider = "NPPC Bhutan",
+                    url = "https://pestsofbhutan.nppc.gov.bt/",
+                    description = "National agricultural pest and disease registry detailing life cycles, symptoms, and control measures."
+                ),
+                ExternalScientificLink(
+                    title = "CABI PlantwisePlus Knowledge Bank",
+                    provider = "CABI",
+                    url = "https://plantwiseplusknowledgebank.org/doi/10.5555/pwkb.20167800063",
+                    description = "Open-access pest management decision guides, distribution maps, and factsheets worldwide."
+                ),
+                ExternalScientificLink(
+                    title = "Bayer CropScience Agronomy ID",
+                    provider = "Bayer CropScience",
+                    url = "https://cropscience.bayer.co.uk/agronomy-id/pest-and-slugs",
+                    description = "Agronomy identification directory for invertebrate pests, mollusc slugs, and foliar disease vectors."
+                ),
+                ExternalScientificLink(
+                    title = "EPPO Plant Quarantine A1 & A2 Lists",
+                    provider = "EPPO",
+                    url = "https://www.eppo.int/ACTIVITIES/plant_quarantine/A1_list",
+                    description = "Official international standard phytosanitary register of quarantine pests recommended for regulation."
+                ),
+                ExternalScientificLink(
+                    title = "Penn State Extension Identification Library",
+                    provider = "Penn State",
+                    url = "https://extension.psu.edu/insects-pests-and-diseases/pest-disease-and-weed-identification/see-all-pest-disease-and-weed-identification",
+                    description = "Academic university extension factsheets for insects, crop pathogens, and weed bio-indicators."
+                ),
+                ExternalScientificLink(
+                    title = "Gardener's Supply Pest & Disease Encyclopedia",
+                    provider = "Gardener's Supply",
+                    url = "https://www.gardeners.com/blogs/pest-disease-encyclopedia",
+                    description = "Horticultural encyclopedia detailing organic controls, beneficial insects, and physiological disorders."
+                ),
+                ExternalScientificLink(
+                    title = "Minnesota MDA Plant Pests & Diseases Index",
+                    provider = "Minnesota MDA",
+                    url = "https://www.mda.state.mn.us/plant-pests-diseases-index",
+                    description = "Statutory state database tracking agricultural plant pests, invasive insects, and noxious weeds."
+                ),
+                ExternalScientificLink(
+                    title = "TAAT Africa Pest Control Technologies",
+                    provider = "TAAT / AfDB",
+                    url = "https://e-catalogs.taat-africa.org/gov/technologies?categories%5B%5D=Pest%20control",
+                    description = "African Development Bank catalog deploying certified bio-pesticides and Fall Armyworm toolkits."
+                ),
+                ExternalScientificLink(
+                    title = "Corson Maize Pests & Diseases",
+                    provider = "Corson Maize",
+                    url = "https://www.corsonmaize.co.nz/pests-and-diseases",
+                    description = "Specialized cereal and maize diagnostic guide for foliar blights, cutworms, armyworms, and stalk rots."
+                ),
+                ExternalScientificLink(
+                    title = "iNaturalist Global Biodiversity & AI ID",
+                    provider = "iNaturalist",
+                    url = "https://www.inaturalist.org/",
+                    description = "Global biodiversity platform with 150M+ verified photo observations and computer vision AI identification."
                 )
             ),
             recommendedSearchQueries = listOf(
-                "Biopython sequence alignment tutorial",
-                "Next-generation sequencing plant pathology pipeline",
-                "CRISPR Cas9 target design for crop disease resistance",
-                "Phylogenetic tree construction with Biopython Phylo"
+                "CABI PlantwisePlus Fall Armyworm decision guide",
+                "EPPO quarantine A1 list Xylella fastidiosa",
+                "AHR Australia vegetable pest identification guide",
+                "Penn State Extension tomato late blight diagnostic key",
+                "NUFLIP Uganda vegetable pests and physiological disorders factsheet",
+                "iNaturalist agricultural insect pest observation records"
             ),
             geminiChatPrompts = listOf(
-                "Explain the mathematical difference between Needleman-Wunsch and Smith-Waterman alignment algorithms with dynamic programming matrix examples.",
-                "How do I build an automated RNA-seq differential gene expression web tool for drought-tolerant maize?",
-                "Provide a Python script using Biopython to design forward and reverse PCR primers for a fungal beta-tubulin gene."
+                "Draw information from CABI PlantwisePlus, EPPO Quarantine list, and Penn State Extension to diagnose bacterial canker versus bacterial wilt in tomatoes.",
+                "Cross-reference the NUFLIP Uganda vegetable factsheet to explain Blossom End Rot causes, calcium translocation, and preventive foliar calcium protocols.",
+                "How do IRAC MoA Group 1B Organophosphates and Group 4A Neonicotinoids differ in preventing resistance in diamondback moth?"
             )
         ),
 
@@ -490,56 +555,50 @@ else:
         ),
 
         ScientificWebAppScaffold(
-            id = "scaffold_fastapi_blast_service",
-            name = "FastAPI Distributed Sequence Alignment Microservice",
-            tag = "Bioinformatics Backend",
-            domain = BioscienceDomain.BIOINFORMATICS,
-            description = "Production-grade asynchronous REST API service built on FastAPI. Accepts DNA/Protein FASTA sequences via POST request, dispatches local BLAST+ or Biopython jobs, and returns structured JSON alignment matches.",
-            techStack = listOf("Python 3.11", "FastAPI", "Uvicorn", "Biopython", "Pydantic v2", "Celery/Redis"),
+            id = "scaffold_global_pest_diagnostic_hub",
+            name = "Global Pest Identification & Diagnostics Web Hub",
+            tag = "Pest & Disease Portal",
+            domain = BioscienceDomain.GLOBAL_PEST_PORTALS,
+            description = "Production-grade Streamlit & FastAPI diagnostic portal that connects to 11 global agricultural databases (CABI PlantwisePlus, EPPO Quarantine, Bayer CropScience ID, Penn State Extension, TAAT Africa, AHR, and iNaturalist) to cross-reference pest biology, symptoms, and IRAC/FRAC chemical rotations.",
+            techStack = listOf("Python 3.11", "Streamlit", "Requests", "Pandas", "BeautifulSoup4", "Urllib"),
             architectureComponents = listOf(
-                "main.py: FastAPI application routes with OpenAPI swagger documentation",
-                "schemas.py: Pydantic models for SequenceQuery and AlignmentResult",
-                "aligner.py: Biopython PairwiseAligner / local BLAST wrapper",
-                "Dockerfile: Multi-stage container with NCBI-BLAST+ binaries installed"
+                "app.py: Interactive multi-database search interface with category filters",
+                "portals.py: 11-website deep-linking engine and query formatter",
+                "nuflip_data.py: Embedded NUFLIP demonstration field factsheets & IRAC/FRAC matrices",
+                "requirements.txt: Dependencies (streamlit, requests, pandas)"
             ),
-            demoInputDescription = "JSON body: {'query_seq': 'ATGAGCAAAGGAGAAGAACTTTTCACTGGAGTT', 'target_seq': 'ATGAGCAAAGGAGAAGAACTTTTCACAGGAGTT'}",
-            expectedOutputDescription = "JSON response with score, alignment length, percentage identity, and formatted alignment string.",
+            demoInputDescription = "Search: 'Fall Armyworm' or 'Bacterial Wilt' or 'Blossom End Rot'.",
+            expectedOutputDescription = "Unified diagnostic cards showing direct links into CABI, EPPO, iNaturalist, Penn State, Bayer ID, and NUFLIP control recommendations.",
             sampleCode = """
-# main.py - FastAPI Bioinformatics Microservice
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from Bio import Align
+# app.py - Global Pest Identification Web Hub
+import streamlit as st
+import urllib.parse
 
-app = FastAPI(title="Bioinformatics Alignment API", version="1.0.0")
+st.set_page_config(page_title="Global Pest & Disease Hub", layout="wide")
+st.title("🌾 Global Pest & Disease Identification Hub")
 
-class AlignmentRequest(BaseModel):
-    query_seq: str
-    target_seq: str
-    mode: str = "global" # "global" or "local"
+query = st.text_input("Search any pest, pathogen, or physiological disorder:", value="Fall Armyworm")
 
-class AlignmentResponse(BaseModel):
-    score: float
-    identity_percent: float
-    alignment_str: str
+PORTALS = {
+    "CABI PlantwisePlus Knowledge Bank": "https://plantwiseplusknowledgebank.org/action/doSearch?AllField=",
+    "EPPO Global Quarantine Database": "https://gd.eppo.int/search?k=",
+    "iNaturalist Species Observations": "https://www.inaturalist.org/search?q=",
+    "Penn State Extension Identification": "https://extension.psu.edu/search/?q=",
+    "Bayer CropScience Agronomy ID": "https://cropscience.bayer.co.uk/search?q=",
+    "AHR Australia Vegetable Guides": "https://ahr.com.au/?s=",
+    "TAAT Africa Technologies": "https://e-catalogs.taat-africa.org/gov/technologies?q=",
+    "Corson Maize Pests & Diseases": "https://www.corsonmaize.co.nz/search?Search="
+}
 
-@app.post("/align", response_model=AlignmentResponse)
-def align_sequences(req: AlignmentRequest):
-    aligner = Align.PairwiseAligner()
-    aligner.mode = req.mode
-    alignments = aligner.align(req.query_seq.upper(), req.target_seq.upper())
-    
-    if not alignments:
-        raise HTTPException(status_code=400, detail="No alignment found.")
-    
-    best = alignments[0]
-    identities = sum(a == b for a, b in zip(best[0], best[1]))
-    identity_pct = (identities / max(len(req.query_seq), len(req.target_seq))) * 100
-    
-    return AlignmentResponse(
-        score=best.score,
-        identity_percent=round(identity_pct, 2),
-        alignment_str=format(best)
-    )
+if query:
+    encoded = urllib.parse.quote_plus(query.strip())
+    st.subheader(f"Direct Diagnostic Records for '{query}':")
+    cols = st.columns(2)
+    for idx, (portal_name, url_template) in enumerate(PORTALS.items()):
+        col = cols[idx % 2]
+        with col:
+            st.markdown(f"**[{portal_name}]({url_template}{encoded})**")
+            st.caption(f"Search official factsheets on {portal_name}")
             """.trimIndent()
         ),
 

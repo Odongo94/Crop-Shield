@@ -354,11 +354,11 @@ class ExampleUnitTest {
     @Test
     fun bioscienceSkillsCatalog_containsAllCoreDomainsAndScaffolds() {
         val modules = com.example.data.science.BioscienceSkillsCatalog.allModules
-        assertTrue("Must contain all 5 core bioscience modules", modules.size >= 5)
+        assertTrue("Must contain all core bioscience modules", modules.size >= 5)
 
         val domains = modules.map { it.domain }.toSet()
         assertTrue(domains.contains(com.example.model.science.BioscienceDomain.WEB_APP_DEV))
-        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.BIOINFORMATICS))
+        assertTrue(domains.contains(com.example.model.science.BioscienceDomain.GLOBAL_PEST_PORTALS))
         assertTrue(domains.contains(com.example.model.science.BioscienceDomain.MOLECULAR_DYNAMICS))
         assertTrue(domains.contains(com.example.model.science.BioscienceDomain.CHEMISTRY_TOOLS))
         assertTrue(domains.contains(com.example.model.science.BioscienceDomain.BIOLOGICAL_DATABASES))
@@ -366,9 +366,66 @@ class ExampleUnitTest {
         val scaffolds = com.example.data.science.BioscienceSkillsCatalog.webAppScaffolds
         assertTrue("Must contain web application scaffolds", scaffolds.size >= 4)
         assertTrue(scaffolds.any { it.name.contains("Streamlit") })
-        assertTrue(scaffolds.any { it.name.contains("FastAPI") })
+        assertTrue(scaffolds.any { it.name.contains("Diagnostics") || it.name.contains("Pest") || it.name.contains("FastAPI") })
         assertTrue(scaffolds.any { it.name.contains("RDKit") })
         assertTrue(scaffolds.any { it.name.contains("PubChem") })
+    }
+
+    @Test
+    fun globalPestPortalsCatalog_containsAll11PortalsAndGeneratesDeepLinks() {
+        val portals = com.example.data.science.GlobalPestPortalsCatalog.allPortals
+        assertEquals(11, portals.size)
+
+        val portalIds = portals.map { it.id }.toSet()
+        assertTrue(portalIds.contains("ahr_australia"))
+        assertTrue(portalIds.contains("nppc_bhutan"))
+        assertTrue(portalIds.contains("cabi_plantwise"))
+        assertTrue(portalIds.contains("bayer_cropscience"))
+        assertTrue(portalIds.contains("eppo_quarantine"))
+        assertTrue(portalIds.contains("psu_extension"))
+        assertTrue(portalIds.contains("gardeners_supply"))
+        assertTrue(portalIds.contains("mda_minnesota"))
+        assertTrue(portalIds.contains("taat_africa"))
+        assertTrue(portalIds.contains("corson_maize"))
+        assertTrue(portalIds.contains("inaturalist"))
+
+        val searchResults = com.example.data.science.GlobalPestPortalsCatalog.searchAllPortals("Fall Armyworm")
+        assertEquals(11, searchResults.size)
+        assertTrue(searchResults.all { it.deepSearchUrl.isNotBlank() })
+        val cabiRes = searchResults.first { it.portal.id == "cabi_plantwise" }
+        assertTrue(cabiRes.deepSearchUrl.contains("plantwiseplusknowledgebank.org"))
+        assertTrue(cabiRes.deepSearchUrl.contains("Fall+Armyworm") || cabiRes.deepSearchUrl.contains("Fall%20Armyworm"))
+    }
+
+    @Test
+    fun nuflipFieldFactsheetsCatalog_containsPestsDiseasesDisordersAndIracFrac() {
+        val factsheets = com.example.data.nuflip.NuflipFieldFactsheetCatalog.factsheets
+        assertTrue(factsheets.size >= 20)
+
+        val pests = factsheets.filter { it.category == com.example.data.nuflip.NuflipCategory.PEST }
+        val diseases = factsheets.filter { it.category == com.example.data.nuflip.NuflipCategory.DISEASE }
+        val disorders = factsheets.filter { it.category == com.example.data.nuflip.NuflipCategory.PHYSIOLOGICAL_DISORDER }
+
+        assertTrue(pests.isNotEmpty())
+        assertTrue(diseases.isNotEmpty())
+        assertTrue(disorders.isNotEmpty())
+
+        // Check specific physiological disorders
+        assertTrue(disorders.any { it.name.contains("Blossom End Rot") })
+        assertTrue(disorders.any { it.name.contains("Sunburn") })
+        assertTrue(disorders.any { it.name.contains("Potassium") })
+        assertTrue(disorders.any { it.name.contains("Flooding") })
+
+        // Check IRAC and FRAC tables
+        val irac = com.example.data.nuflip.NuflipFieldFactsheetCatalog.iracInsecticideList
+        assertTrue(irac.isNotEmpty())
+        assertTrue(irac.any { it.moaGroup == "1A" })
+        assertTrue(irac.any { it.moaGroup == "4A" })
+
+        val frac = com.example.data.nuflip.NuflipFieldFactsheetCatalog.fracFungicideList
+        assertTrue(frac.isNotEmpty())
+        assertTrue(frac.any { it.fracCode.contains("M1") })
+        assertTrue(frac.any { it.activeIngredients.any { ing -> ing.contains("Bronopol") } })
     }
 
     @Test
@@ -377,8 +434,8 @@ class ExampleUnitTest {
         assertTrue(rdkitHits.isNotEmpty())
         assertTrue(rdkitHits.any { it.title.contains("RDKit") || it.toolsAndLibraries.contains("RDKit") })
 
-        val blastHits = com.example.data.science.BioscienceSkillsCatalog.searchModules("BLAST")
-        assertTrue(blastHits.isNotEmpty())
+        val portalHits = com.example.data.science.BioscienceSkillsCatalog.searchModules("Plantwise")
+        assertTrue(portalHits.isNotEmpty())
 
         val dynamicsModules = com.example.data.science.BioscienceSkillsCatalog.getModulesByDomain(
             com.example.model.science.BioscienceDomain.MOLECULAR_DYNAMICS
@@ -391,21 +448,28 @@ class ExampleUnitTest {
     fun bioscienceGeminiService_quickPromptsAndOfflineEngine() {
         val prompts = com.example.data.ai.BioscienceGeminiService.quickPrompts
         assertTrue("Must have bioscience quick prompts", prompts.size >= 5)
+        assertTrue(prompts.any { it.shortLabel.contains("Global Pest") || it.category.contains("Global Pest") })
+        assertTrue(prompts.any { it.shortLabel.contains("NUFLIP") || it.category.contains("NUFLIP") })
         assertTrue(prompts.any { it.shortLabel.contains("PDB Viewer") })
-        assertTrue(prompts.any { it.shortLabel.contains("BLAST") })
-        assertTrue(prompts.any { it.shortLabel.contains("AutoDock") })
 
         // 1. Streamlit 3D query
         val streamlitResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("How do I build a Streamlit 3D molecule viewer web app?")
         assertTrue(streamlitResponse.contains("Streamlit"))
         assertTrue(streamlitResponse.contains("py3Dmol"))
 
-        // 2. BLAST alignment query
-        val blastResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("Explain Needleman-Wunsch and BLAST alignment")
-        assertTrue(blastResponse.contains("Needleman-Wunsch"))
-        assertTrue(blastResponse.contains("Biopython"))
+        // 2. 11 Portals query
+        val portalResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("Tell me about CABI Plantwise and EPPO quarantine portals")
+        assertTrue(portalResponse.contains("CABI PlantwisePlus"))
+        assertTrue(portalResponse.contains("EPPO"))
+        assertTrue(portalResponse.contains("iNaturalist"))
 
-        // 3. Chemoinformatics query
+        // 3. NUFLIP physiological disorders query
+        val nuflipResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("How do I fix Blossom End Rot and Sunburn from the NUFLIP guide?")
+        assertTrue(nuflipResponse.contains("Blossom End Rot"))
+        assertTrue(nuflipResponse.contains("Calcium Nitrate"))
+        assertTrue(nuflipResponse.contains("Sunburn"))
+
+        // 4. Chemoinformatics query
         val chemResponse = com.example.data.ai.BioscienceGeminiService.generateOfflineBioscienceResponse("How do I calculate Lipinski Rule of 5 and LogP with RDKit?")
         assertTrue(chemResponse.contains("Lipinski"))
         assertTrue(chemResponse.contains("RDKit"))

@@ -1,6 +1,14 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import com.example.data.science.GlobalPestPortalsCatalog
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,9 +42,12 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Nature
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PrecisionManufacturing
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Spa
@@ -53,6 +64,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -95,7 +107,7 @@ fun ThreatDetailScreen(
     BackHandler { onBackClick() }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabTitles = listOf("Lifecycle", "Infonet & IPM", "PCPB Chemicals", "CABI Biocontrol", "Scouting")
+    val tabTitles = listOf("Lifecycle", "Infonet & IPM", "PCPB Chemicals", "CABI Biocontrol", "11 Global Portals", "Scouting")
 
     Scaffold(
         topBar = {
@@ -473,8 +485,15 @@ fun ThreatDetailScreen(
                         )
                     }
 
-                    // TAB 4: Scouting Guide & Checklist
+                    // TAB 4: 11 Authoritative Global & Regional Portals
                     4 -> {
+                        ThreatGlobalPortalsTab(
+                            threat = threat
+                        )
+                    }
+
+                    // TAB 5: Scouting Guide & Checklist
+                    5 -> {
                         ScoutingTab(
                             threat = threat,
                             onRecordScoutClick = { onAddScoutLog(threat) },
@@ -1354,3 +1373,181 @@ fun ScoutingTab(
         }
     }
 }
+
+/**
+ * Tab displaying active deep links and search integrations for the current threat
+ * across all 11 authoritative international websites and Google.
+ */
+@Composable
+private fun ThreatGlobalPortalsTab(
+    threat: CropThreat,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val query = threat.scientificName.ifBlank { threat.name }
+
+    fun openBrowserUrl(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Could not open browser: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val portalResults = GlobalPestPortalsCatalog.searchAllPortals(query)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("threat_global_portals_tab"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Hero Intro Card
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "11 Authoritative International Portals",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Instantly cross-reference '${threat.name}' ($query) against worldwide phytosanitary, university extension, and regional diagnostic repositories.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val encoded = URLEncoder.encode("$query pest disease control", StandardCharsets.UTF_8.toString())
+                            openBrowserUrl("https://www.google.com/search?q=$encoded")
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_google_threat_search"),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Google Search", fontSize = 11.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val encoded = URLEncoder.encode("$query crop protection pathology", StandardCharsets.UTF_8.toString())
+                            openBrowserUrl("https://scholar.google.com/scholar?q=$encoded")
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_scholar_threat_search"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Google Scholar", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = "Official Institution Records & Keys (${portalResults.size} portals):",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        // All 11 Portal Links
+        portalResults.forEach { result ->
+            OutlinedCard(
+                onClick = { openBrowserUrl(result.deepSearchUrl) },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("threat_portal_${result.portal.id}")
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Text(result.portal.iconEmoji, fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = result.portal.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = result.portal.organization,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { openBrowserUrl(result.deepSearchUrl) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInBrowser,
+                                contentDescription = "Open in browser",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = result.portal.coverageDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { openBrowserUrl(result.deepSearchUrl) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInBrowser,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Query ${result.portal.name.substringBefore(" ")} for '$query'",
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

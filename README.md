@@ -491,6 +491,43 @@ app/src/main/java/com/example/
 
 ---
 
+## 🌍 11 Authoritative Global & Regional Pest Identification Portals
+
+CropShield integrates deep diagnostic cross-referencing and 1-tap browser lookup across 11 premier international plant protection and quarantine organizations:
+
+1. **AHR Pest & Disease Identification Guides (Australia)**: Field identification guides for Brassicas, Alliums, Cucurbits, and Solanaceous crops (`https://ahr.com.au/blog/news/pest-and-disease-identification-guides-available`).
+2. **Pests of Bhutan Diagnostic Portal (NPPC)**: National agricultural entomology and plant pathology registry with lifecycle stages and non-chemical IPM thresholds (`https://pestsofbhutan.nppc.gov.bt/`).
+3. **CABI PlantwisePlus Knowledge Bank**: Premier global open-access diagnostic repository featuring Pest Management Decision Guides (PMDGs) and distribution maps (`https://plantwiseplusknowledgebank.org/doi/10.5555/pwkb.20167800063`).
+4. **Bayer CropScience Agronomy ID**: Commercial field keys for invertebrate pests and foliar vectors with economic thresholds (`https://cropscience.bayer.co.uk/agronomy-id/pest-and-slugs`).
+5. **EPPO Global Quarantine A1 & A2 Lists**: Official international standard phytosanitary register of quarantine pests recommended for regulation (`https://www.eppo.int/ACTIVITIES/plant_quarantine/A1_list`).
+6. **Penn State Extension Identification Library**: Academic university diagnostic keys for insect, pathogen, and weed identification (`https://extension.psu.edu/insects-pests-and-diseases/pest-disease-and-weed-identification/see-all-pest-disease-and-weed-identification`).
+7. **Gardener's Supply Pest & Disease Encyclopedia**: Practical horticultural diagnostic encyclopedia detailing organic and cultural pest remedies (`https://www.gardeners.com/blogs/pest-disease-encyclopedia`).
+8. **Minnesota MDA Plant Pests & Diseases Index**: Regulatory and surveillance database tracking agricultural pests and statutory noxious weeds (`https://www.mda.state.mn.us/plant-pests-diseases-index`).
+9. **TAAT Africa Pest Control Technologies (AfDB / CGIAR)**: High-impact technology catalog deploying certified bio-pesticides and Fall Armyworm biocontrol (`https://e-catalogs.taat-africa.org/gov/technologies?categories%5B%5D=Pest%20control`).
+10. **Corson Maize Pests & Diseases Portal**: Specialized cereal and maize pathology guide targeting Northern Corn Leaf Blight, Eyespot, Cutworms, and Rusts (`https://www.corsonmaize.co.nz/pests-and-diseases`).
+11. **iNaturalist Global Biodiversity & AI Species ID**: 150M+ verified photo observations and machine learning computer vision AI species ID (`https://www.inaturalist.org/`).
+
+---
+
+## 🍅 NUFLIP Vegetable Factsheets & Resistance Management Guide
+
+Derived from the **Northern Uganda Farmers' Livelihood Improvement Project (NUFLIP / JICA / MAAIF Uganda)** demonstration fields:
+
+* **22 Insect Pests**: Diamondback Moth, False Codling Moth, Fall Armyworm, Tuta Absoluta, Melon Fruit Fly, Onion Thrips, Aphids, Whiteflies, Cotton Aphid, Epilachna Beetles, etc.
+* **22 Plant Diseases**: Tomato Late Blight, Bacterial Wilt (*Ralstonia solanacearum*), Early Blight (*Alternaria solani*), Anthracnose, Fusarium Wilt, Powdery & Downy Mildews, Purple Blotch, Tomato Yellow Leaf Curl Virus (TYLCV), etc.
+* **8 Physiological Disorders**:
+  1. *Blossom End Rot (BER)*: Calcium translocation deficiency under fluctuating moisture; remedied with Calcium Nitrate foliar sprays.
+  2. *Potassium Deficiency*: Leaf margin scorching and yellow shoulders; treated with $K_2SO_4$.
+  3. *Magnesium Deficiency*: Interveinal chlorosis; treated with Epsom salts (10–20 g/L).
+  4. *Sunburn / Sunscald*: Thermal radiation necrosis; remedied by preserving leaf canopy and applying Kaolin clay.
+  5. *Fertilizer & Pesticide Burn*: Chemical salt injury; remedied by 5–10 cm ring distance and avoiding midday applications.
+  6. *Flooding & Hypoxia*: Root oxygen deprivation; prevented by 20–30 cm raised beds.
+  7. *Watermelon Poor Pollination*: Inadequate bee visits; remedied by eliminating morning insecticide sprays.
+* **IRAC MoA Classification**: Resistance rotation across Groups 1A, 1B, 4A, 6, and 3A.
+* **FRAC Fungicide Classification & Bronopol**: Balancing multi-site contact protectants (M1, M2, M3) with site-specific systemics (Groups 1, 3, 4, 11, 27) and Bronopol plant activator for bacterial disease suppression.
+
+---
+
 ## 📐 Soil Texture Triangle Mathematics
 
 The USDA Soil Texture Triangle represents a 3-component ternary simplex where:

@@ -3,22 +3,23 @@ package com.example.model.science
 import androidx.compose.ui.graphics.Color
 
 /**
- * Core scientific domains for bioscience skills and scientific web applications.
+ * Core scientific domains for bioscience skills, scientific web applications,
+ * and authoritative global pest & disease identification portals.
  */
 enum class BioscienceDomain(
     val title: String,
     val subtitle: String,
     val badgeColor: Color
 ) {
+    GLOBAL_PEST_PORTALS(
+        title = "Pest & Disease Portals",
+        subtitle = "AHR, CABI, EPPO, PennState, Bayer, TAAT, iNaturalist",
+        badgeColor = Color(0xFF1E88E5)
+    ),
     WEB_APP_DEV(
         title = "Scientific Web Apps",
-        subtitle = "Streamlit, Dash, Mol* 3D, FastAPI & BioAssembly",
+        subtitle = "Streamlit, Dash, Mol* 3D, FastAPI & Field Apps",
         badgeColor = Color(0xFF00897B)
-    ),
-    BIOINFORMATICS(
-        title = "Bioinformatics",
-        subtitle = "Sequence alignment, NGS pipelines & CRISPR genomics",
-        badgeColor = Color(0xFF1E88E5)
     ),
     MOLECULAR_DYNAMICS(
         title = "Molecular Dynamics",
@@ -38,6 +39,33 @@ enum class BioscienceDomain(
 }
 
 /**
+ * Global and regional plant protection organizations, pest identification portals,
+ * and diagnostic field guide registries.
+ */
+data class GlobalPestIdentificationPortal(
+    val id: String,
+    val name: String,
+    val organization: String,
+    val url: String,
+    val searchUrlTemplate: String?, // Search URL template where query can be appended
+    val coverageDescription: String,
+    val keySpecialties: List<String>,
+    val diagnosticGuideType: String,
+    val iconEmoji: String
+)
+
+/**
+ * Deep search result matching an active pest or disease query against an authoritative global portal.
+ */
+data class PortalSearchResult(
+    val portal: GlobalPestIdentificationPortal,
+    val query: String,
+    val deepSearchUrl: String,
+    val title: String,
+    val description: String
+)
+
+/**
  * Executable code recipe for a scientific web application or data processing pipeline.
  */
 data class CodeRecipe(
@@ -49,11 +77,11 @@ data class CodeRecipe(
 )
 
 /**
- * Direct link to scientific search engines and biological databases.
+ * Direct link to scientific search engines, biological databases, or pest portals.
  */
 data class ExternalScientificLink(
     val title: String,
-    val provider: String, // "Google Search", "Google Scholar", "PubMed", "NCBI", "PubChem", "PDB", "UniProt"
+    val provider: String,
     val url: String,
     val description: String
 )
@@ -93,7 +121,7 @@ data class ScientificWebAppScaffold(
 )
 
 /**
- * Search engine target for scientific investigations.
+ * Search engine target for scientific investigations and authoritative agricultural databases.
  */
 enum class ScientificSearchTarget(
     val displayName: String,
@@ -105,36 +133,48 @@ enum class ScientificSearchTarget(
         displayName = "Google Web",
         baseUrl = "https://www.google.com/search",
         queryParam = "q",
-        helperText = "Search scientific publications, tools, and developer documentation"
+        helperText = "Search global scientific publications, pest databases, and agricultural literature"
     ),
     GOOGLE_SCHOLAR(
         displayName = "Google Scholar",
         baseUrl = "https://scholar.google.com/scholar",
         queryParam = "q",
-        helperText = "Search peer-reviewed agricultural & molecular biology papers"
+        helperText = "Search peer-reviewed agronomy, pathology, and entomology journals"
     ),
-    PUBMED(
-        displayName = "PubMed Central",
-        baseUrl = "https://pubmed.ncbi.nlm.nih.gov/",
-        queryParam = "term",
-        helperText = "Search biomedical, crop genomics, and toxicology literature"
+    CABI_PLANTWISE(
+        displayName = "CABI PlantwisePlus",
+        baseUrl = "https://plantwiseplusknowledgebank.org/action/doSearch",
+        queryParam = "AllField",
+        helperText = "CABI PlantwisePlus diagnostic factsheets & management decision guides"
     ),
-    NCBI_GENBANK(
-        displayName = "NCBI Entrez",
-        baseUrl = "https://www.ncbi.nlm.nih.gov/search/all/",
-        queryParam = "term",
-        helperText = "Search gene sequences, BLAST queries, and nucleotide accessions"
+    EPPO_QUARANTINE(
+        displayName = "EPPO Quarantine",
+        baseUrl = "https://gd.eppo.int/search",
+        queryParam = "k",
+        helperText = "EPPO A1/A2 Global Quarantine and Phytosanitary alert pest registers"
+    ),
+    INATURALIST(
+        displayName = "iNaturalist Global",
+        baseUrl = "https://www.inaturalist.org/search",
+        queryParam = "q",
+        helperText = "Crowdsourced biological species observations and AI identification"
+    ),
+    PENN_STATE(
+        displayName = "Penn State Extension",
+        baseUrl = "https://extension.psu.edu/search/",
+        queryParam = "q",
+        helperText = "Penn State university insect, pathogen, and weed diagnostic library"
+    ),
+    BAYER_AGRONOMY(
+        displayName = "Bayer CropScience ID",
+        baseUrl = "https://cropscience.bayer.co.uk/search",
+        queryParam = "q",
+        helperText = "Bayer agronomy pest & slug diagnostic keys and chemical timings"
     ),
     PUBCHEM(
         displayName = "PubChem Chemistry",
         baseUrl = "https://pubchem.ncbi.nlm.nih.gov/#query=",
-        queryParam = "", // Direct query path
-        helperText = "Search agrochemical structures, pesticide SMILES, and bioactivity"
-    ),
-    PDB_STRUCTURES(
-        displayName = "RCSB PDB 3D",
-        baseUrl = "https://www.rcsb.org/search?request=",
         queryParam = "",
-        helperText = "Search 3D crystal structures of crop receptors and pathogen enzymes"
+        helperText = "Search agrochemical active ingredients, pesticide SMILES, and bioactivity"
     )
 }

@@ -30,25 +30,32 @@ object BioscienceGeminiService {
 
     val quickPrompts: List<AiQuickPrompt> = listOf(
         AiQuickPrompt(
+            id = "bp_global_portals",
+            iconEmoji = "🌍",
+            category = "Global Pest Portals",
+            shortLabel = "Query 11 Global Pest Websites",
+            fullPrompt = "How do I cross-reference crop pests and diseases across CABI PlantwisePlus, EPPO Quarantine A1/A2, iNaturalist, Penn State Extension, and Bayer Agronomy ID, and how can an app deep-link into all 11 portals?"
+        ),
+        AiQuickPrompt(
+            id = "bp_nuflip_disorders",
+            iconEmoji = "🍅",
+            category = "NUFLIP Field Factsheets",
+            shortLabel = "NUFLIP Vegetable Disorders",
+            fullPrompt = "What are the key physiological disorders in tomatoes and watermelons (Blossom End Rot, Potassium/Magnesium deficiency, Sunburn, Flooding damage) according to the NUFLIP / JICA Northern Uganda guide, and what are their field remedies?"
+        ),
+        AiQuickPrompt(
+            id = "bp_irac_frac_moa",
+            iconEmoji = "🛡️",
+            category = "Resistance Management",
+            shortLabel = "IRAC & FRAC MoA + Bronopol",
+            fullPrompt = "Explain the IRAC insecticide MoA groups (1A, 1B, 4A, 6, 3A) and FRAC fungicide codes (M1, M2, M3, Group 1, 3, 4, 11, 27) and the role of Bronopol as a bacterial blight control and plant activator."
+        ),
+        AiQuickPrompt(
             id = "bp_streamlit_pdb",
             iconEmoji = "🌐",
             category = "Scientific Web Apps",
             shortLabel = "Build 3D PDB Viewer Web App",
             fullPrompt = "How do I build an interactive 3D protein viewer web application in Python using Streamlit and py3Dmol that fetches structures directly from the RCSB PDB REST API?"
-        ),
-        AiQuickPrompt(
-            id = "bp_bioinfo_blast",
-            iconEmoji = "🧬",
-            category = "Bioinformatics",
-            shortLabel = "BLAST & Sequence Alignment",
-            fullPrompt = "Explain the difference between global Needleman-Wunsch and local Smith-Waterman alignment, and write a Biopython script to perform pairwise sequence alignment with scoring."
-        ),
-        AiQuickPrompt(
-            id = "bp_mol_docking",
-            iconEmoji = "⚛️",
-            category = "Molecular Dynamics",
-            shortLabel = "AutoDock Vina Pesticide Docking",
-            fullPrompt = "How do I set up a molecular docking workflow using AutoDock Vina to dock an insecticide molecule against an insect Ryanodine receptor in silico?"
         ),
         AiQuickPrompt(
             id = "bp_rdkit_lipinski",
@@ -58,18 +65,11 @@ object BioscienceGeminiService {
             fullPrompt = "Write a complete Python script using RDKit that parses a SMILES string, calculates Molecular Weight, LogP, TPSA, H-bond donors/acceptors, and tests Lipinski drug-likeness."
         ),
         AiQuickPrompt(
-            id = "bp_ncbi_entrez",
-            iconEmoji = "📚",
-            category = "Biological Databases",
-            shortLabel = "NCBI Entrez REST API ETL",
-            fullPrompt = "Show me how to use Python and NCBI Entrez E-utilities (esearch & efetch) to programmatically search for crop pathogen resistance genes and download their FASTA records."
-        ),
-        AiQuickPrompt(
-            id = "bp_crispr_crops",
-            iconEmoji = "✂️",
-            category = "Genomics",
-            shortLabel = "CRISPR-Cas9 Crop Editing",
-            fullPrompt = "Explain the computational pipeline for designing guide RNAs (sgRNAs) for CRISPR-Cas9 crop genome editing, including off-target prediction algorithms."
+            id = "bp_mol_docking",
+            iconEmoji = "⚛️",
+            category = "Molecular Dynamics",
+            shortLabel = "AutoDock Vina Pesticide Docking",
+            fullPrompt = "How do I set up a molecular docking workflow using AutoDock Vina to dock an insecticide molecule against an insect Ryanodine receptor in silico?"
         )
     )
 
@@ -121,15 +121,16 @@ object BioscienceGeminiService {
         apiKey: String
     ): String? {
         val systemPrompt = buildString {
-            append("You are 'CropShield Bioscience & Bioinformatics AI', an elite Senior Computational Biologist, Structural Biophysicist, Chemoinformatician, and Scientific Web Application Architect. ")
-            append("You guide researchers, agronomists, software engineers, and university students in building scientific web applications. ")
-            append("Your expertise covers: ")
-            append("1. Scientific Web Applications: Streamlit, Dash, FastAPI, Next.js for Science, Dockerizing computational biology tools, Mol* / 3Dmol.js WebGL molecular visualization. ")
-            append("2. Bioinformatics: Pairwise and multiple sequence alignment (Needleman-Wunsch, Smith-Waterman, BLAST+, Clustal Omega), NGS RNA-Seq pipelines, CRISPR-Cas9/Cas12 guide RNA design, plant genomics, phylogenetics. ")
-            append("3. Molecular Dynamics & Structural Biology: GROMACS, OpenMM, AMBER force fields (ff14SB, CHARMM36m), AlphaFold 2/3 structure prediction, AutoDock Vina molecular docking, binding affinity (kcal/mol), RMSD/RMSF trajectory analysis. ")
-            append("4. Chemoinformatics & Chemistry Tools: RDKit, canonical SMILES, InChI, Lipinski Rule of 5, TPSA, QSAR modeling, pesticide soil degradation kinetics (DT50, Koc). ")
-            append("5. Biological Databases: NCBI GenBank/Entrez API, UniProt KB REST API, RCSB PDB REST/GraphQL, PubChem PUG REST, Ensembl Plants. ")
-            append("Provide rigorous, mathematically sound, step-by-step code snippets in Python, JavaScript, or Bash with explanations.")
+            append("You are 'CropShield Bioscience & Agricultural Diagnostics AI', an elite Senior Plant Pathologist, Chemoinformatician, and Scientific Web Application Architect. ")
+            append("You guide researchers, agronomists, software engineers, and university students in plant protection, diagnostic portal integration, and building scientific web applications. ")
+            append("Your knowledge base integrates: ")
+            append("1. 11 Authoritative Global Pest & Disease Identification Portals: AHR Australia (Brassica/Allium/Solanaceae keys), NPPC Bhutan (entomology/pathology registry), CABI PlantwisePlus Knowledge Bank (Pest Management Decision Guides), Bayer CropScience Agronomy ID (economic thresholds & timings), EPPO Global Quarantine A1/A2 Registers, Penn State Extension Library, Gardener's Supply Encyclopedia (organic & cultural solutions), Minnesota MDA Statutory Index, TAAT Africa Technologies (CGIAR & AfDB validated IPM), Corson Maize Pests & Diseases (cereal pathology), and iNaturalist Global Biodiversity AI ID. ")
+            append("2. NUFLIP (JICA / MAAIF Northern Uganda) Demonstration Field Factsheets: 22 insect pests, 22 diseases, and 8 physiological disorders (Blossom End Rot, Potassium/Magnesium deficiency, Sunburn, Flooding, Pollination failure), IRAC MoA insecticide rotation (1A, 1B, 4A, 6, 3A), and FRAC fungicide classifications with Bronopol plant activator. ")
+            append("3. Scientific Web Applications: Streamlit, Dash, FastAPI, Next.js for Science, Dockerizing diagnostic tools, Mol* / 3Dmol.js WebGL molecular visualization. ")
+            append("4. Molecular Dynamics & Structural Biology: AlphaFold structure prediction, AutoDock Vina molecular docking, binding affinity (kcal/mol), RMSD/RMSF trajectory analysis. ")
+            append("5. Chemoinformatics & Chemistry Tools: RDKit, canonical SMILES, InChI, Lipinski Rule of 5, TPSA, QSAR modeling, pesticide soil degradation kinetics. ")
+            append("6. Google Web & Google Scholar integration for peer-reviewed citations. ")
+            append("Provide rigorous, mathematically sound, step-by-step guidance and code with explanations.")
         }
 
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
@@ -239,6 +240,67 @@ object BioscienceGeminiService {
     internal fun generateOfflineBioscienceResponse(query: String): String {
         val q = query.lowercase()
         return when {
+            q.contains("portal") || q.contains("website") || q.contains("cabi") || q.contains("eppo") ||
+                q.contains("inaturalist") || q.contains("penn state") || q.contains("bayer") ||
+                q.contains("ahr") || q.contains("bhutan") || q.contains("taat") || q.contains("corson") -> buildString {
+                append("### 🌍 11 Authoritative International Pest & Disease Diagnostic Portals\n\n")
+                append("CropShield integrates deep search links and identification keys across 11 premier global repositories:\n\n")
+                append("1. **AHR Australia**: Field identification guides for Brassicas, Alliums, Cucurbits, and Solanaceae (`https://ahr.com.au/blog/news/pest-and-disease-identification-guides-available`).\n")
+                append("2. **NPPC Bhutan**: National Plant Protection Centre diagnostic registry for life histories, biology, and economic thresholds (`https://pestsofbhutan.nppc.gov.bt/`).\n")
+                append("3. **CABI PlantwisePlus**: World-renowned Pest Management Decision Guides (PMDGs) and global distribution maps (`https://plantwiseplusknowledgebank.org/doi/10.5555/pwkb.20167800063`).\n")
+                append("4. **Bayer CropScience Agronomy ID**: Commercial field keys for invertebrate pests and foliar vectors (`https://cropscience.bayer.co.uk/agronomy-id/pest-and-slugs`).\n")
+                append("5. **EPPO Global Quarantine A1/A2**: International phytosanitary alert and regulated quarantine registers (`https://www.eppo.int/ACTIVITIES/plant_quarantine/A1_list`).\n")
+                append("6. **Penn State Extension**: Academic university diagnostic keys for insect, pathogen, and weed identification (`https://extension.psu.edu/insects-pests-and-diseases/pest-disease-and-weed-identification/see-all-pest-disease-and-weed-identification`).\n")
+                append("7. **Gardener's Supply Encyclopedia**: Organic controls, cultural sanitation, and companion planting (`https://www.gardeners.com/blogs/pest-disease-encyclopedia`).\n")
+                append("8. **Minnesota MDA Index**: State statutory plant pest and noxious weed regulatory directory (`https://www.mda.state.mn.us/plant-pests-diseases-index`).\n")
+                append("9. **TAAT Africa Technologies**: CGIAR & AfDB validated African IPM technologies and FAW biocontrol (`https://e-catalogs.taat-africa.org/gov/technologies?categories%5B%5D=Pest%20control`).\n")
+                append("10. **Corson Maize Pests & Diseases**: Maize and cereal foliar blights, cutworms, and stalk rots (`https://www.corsonmaize.co.nz/pests-and-diseases`).\n")
+                append("11. **iNaturalist Global Biodiversity & AI**: 150M+ verified photo observations and computer vision AI species ID (`https://www.inaturalist.org/`).\n\n")
+                append("All 11 portals can be searched simultaneously in the **11 Global Portals tab** in Bioscience Skills or directly when inspecting any threat in the scouting tool.")
+            }
+
+            q.contains("nuflip") || q.contains("disorder") || q.contains("blossom end rot") ||
+                q.contains("sunburn") || q.contains("sunscald") || q.contains("potassium") ||
+                q.contains("flooding") || q.contains("pollination") -> buildString {
+                append("### 🍅 NUFLIP Vegetable Factsheets & Physiological Disorders (Acholi Sub-Region / JICA)\n\n")
+                append("Key non-pathogenic physiological disorders documented in Northern Uganda demonstration fields:\n\n")
+                append("1. **Blossom End Rot (BER)**:\n")
+                append("   - **Cause**: Inadequate calcium translocated to rapidly expanding distal fruit tissue under irregular watering or high NH4+ nitrogen.\n")
+                append("   - **Symptoms**: Flat, leathery, dark brown/black sunken scar at blossom end of tomato, pepper, and watermelon fruits.\n")
+                append("   - **Remedy**: Apply Calcium Nitrate foliar spray (5–10 g/L) weekly. Maintain constant drip irrigation moisture.\n\n")
+                append("2. **Potassium & Magnesium Deficiency**:\n")
+                append("   - **Potassium**: Yellowing and necrosis starting on outer leaf margins of older leaves; poor fruit coloring ('yellow shoulders'). Remedy: Potassium sulphate (K2SO4) or wood ash topdressing.\n")
+                append("   - **Magnesium**: Interveinal chlorosis (bright yellow tissue between dark green veins). Remedy: Epsom salts (Magnesium sulphate 10–20 g/L) foliar spray.\n\n")
+                append("3. **Sunburn / Sunscald**:\n")
+                append("   - **Cause**: Sudden fruit exposure to direct intense tropical sun (>35°C) following insect defoliation or excessive pruning.\n")
+                append("   - **Symptoms**: Shiny, bleached, papery white to tan sunken patch with sharp boundary.\n")
+                append("   - **Remedy**: Maintain canopy cover; spray Kaolin clay reflective barrier.\n\n")
+                append("4. **Flooding & Hypoxia**:\n")
+                append("   - **Cause**: Waterlogged root zone starving root cells of oxygen (anoxic root rot).\n")
+                append("   - **Remedy**: Raised beds (20–30 cm), perimeter drainage trenches, avoid planting in low-lying swamp basins during peak rains.\n\n")
+                append("5. **Watermelon Poor Pollination**:\n")
+                append("   - **Cause**: Lack of bee visits (minimum 8–10 visits per female flower required).\n")
+                append("   - **Symptoms**: Misshapen, gourd-like, bottle-necked fruit with shriveled blossom ends.\n")
+                append("   - **Remedy**: Never spray insecticides between 6:00 AM and 11:00 AM when honeybees forage; intercrop bee-friendly herbs.")
+            }
+
+            q.contains("irac") || q.contains("frac") || q.contains("bronopol") || q.contains("moa") || q.contains("resistance") -> buildString {
+                append("### 🛡️ IRAC & FRAC Mode of Action (MoA) Classification & Bronopol\n\n")
+                append("Preventing chemical resistance through systematic MoA rotation:\n\n")
+                append("1. **IRAC Insecticide MoA Groups**:\n")
+                append("   - **Group 1A & 1B (AChE Inhibitors)**: Carbamates (Carbofuran) & Organophosphates (Acephate, Chlorpyrifos, Dimethoate, Malathion).\n")
+                append("   - **Group 4A (Nicotinic AChR Agonists)**: Neonicotinoids (Acetamiprid, Imidacloprid, Thiamethoxam) - high systemic translocation.\n")
+                append("   - **Group 6 (Glutamate-gated Chloride Channels)**: Avermectins (Abamectin, Emamectin benzoate) - ideal for spider mites and leafminers.\n")
+                append("   - **Group 3A (Sodium Channel Modulators)**: Pyrethroids (Lambda-cyhalothrin, Cypermethrin, Deltamethrin) - rapid knockdown.\n\n")
+                append("2. **FRAC Fungicide Groups & Bronopol**:\n")
+                append("   - **Group M1, M2, M3 (Multi-Site Protectants)**: Copper hydroxide, Sulphur, Mancozeb - low resistance risk; mix with systemics.\n")
+                append("   - **Group 1 (Benzimidazoles)**: Carbendazim, Thiophanate-methyl.\n")
+                append("   - **Group 3 (DMI Triazoles)**: Difenoconazole, Tebuconazole - curative ergosterol inhibitors.\n")
+                append("   - **Group 4 (PA Phenylamides)**: Metalaxyl - specific for Oomycetes (Late Blight, Downy Mildew).\n")
+                append("   - **Group 11 (QoI Strobilurins)**: Azoxystrobin - high single-site resistance risk; limit to max 2 applications per season.\n")
+                append("   - **Bronopol (Plant Activator & Bactericide)**: Induces Systemic Acquired Resistance (SAR) against Bacterial Wilt, Bacterial Canker, and Black Rot.")
+            }
+
             q.contains("streamlit") || q.contains("web app") || q.contains("viewer") -> buildString {
                 append("### 🌐 Building Scientific Web Apps with Streamlit & 3Dmol.js\n\n")
                 append("To build a reactive scientific web application in pure Python:\n\n")

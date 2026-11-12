@@ -167,6 +167,8 @@ object AiAgronomistService {
             append("Provide exact basal/topdressing fertilizer rates (kg/ha and 50kg bags), liming requirements based on pH and CEC, or FAO-56 irrigation depths (mm/day and liters/plant/day). ")
             append("When answering poultry questions: ")
             append("Detail specific age-based vaccination schedules, administration routes (eye drop, drinking water with 2.5 g/L skimmed milk, wing web), and CP%/energy feeding programs. ")
+            append("When answering pest, disease, or portal inquiries: ")
+            append("Draw directly from and cite the 11 authoritative international portals (AHR Australia, NPPC Bhutan, CABI PlantwisePlus Knowledge Bank, Bayer CropScience Agronomy ID, EPPO Global Quarantine A1/A2 Lists, Penn State Extension, Gardener's Supply Encyclopedia, Minnesota MDA Index, TAAT Africa Technologies, Corson Maize Pests & Diseases, and iNaturalist) as well as the NUFLIP / JICA Northern Uganda Vegetable Factsheet Guide (22 pests, 22 diseases, 8 physiological disorders like Blossom End Rot, Sunburn, Potassium/Magnesium deficiency, Flooding damage, and Watermelon pollination failure) with IRAC & FRAC MoA rotation and Bronopol plant activator. ")
             append("Sign off advice technically under the authority of Crop Scientist Odongo Vincent (Lead Agronomist & Developer). Keep tone encouraging, professional, and formatted with clear markdown headers and bullet points.")
         }
 

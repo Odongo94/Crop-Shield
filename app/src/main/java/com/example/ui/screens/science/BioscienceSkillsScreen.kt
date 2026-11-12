@@ -66,6 +66,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -114,7 +115,7 @@ fun BioscienceSkillsScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     var selectedMainTab by remember { mutableIntStateOf(0) }
-    val tabTitles = listOf("Curriculum", "Web App Scaffolds", "Google Search", "Gemini AI")
+    val tabTitles = listOf("11 Global Portals", "NUFLIP Factsheets", "Web App Scaffolds", "Curriculum", "Search & AI")
 
     ScaffoldWithHeader(
         onNavigateBack = onNavigateBack,
@@ -123,10 +124,11 @@ fun BioscienceSkillsScreen(
         onTabSelected = { selectedMainTab = it }
     ) {
         when (selectedMainTab) {
-            0 -> BioscienceCurriculumTab()
-            1 -> BioscienceScaffoldsTab()
-            2 -> BioscienceSearchEngineTab()
-            3 -> BioscienceGeminiChatTab()
+            0 -> GlobalPestPortalsTab()
+            1 -> NuflipFactsheetsTab()
+            2 -> BioscienceScaffoldsTab()
+            3 -> BioscienceCurriculumTab()
+            4 -> BioscienceGeminiChatTab()
         }
     }
 }
@@ -198,7 +200,7 @@ private fun ScaffoldWithHeader(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Scientific Web Apps • Bioinformatics • Dynamics • Chemistry",
+                            text = "11 Global Portals • NUFLIP Factsheets • Web Scaffolds • AI",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -209,9 +211,10 @@ private fun ScaffoldWithHeader(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Primary Tab Row
-                PrimaryTabRow(
+                // Scrollable Tab Row for 5 tabs
+                ScrollableTabRow(
                     selectedTabIndex = selectedTab,
+                    edgePadding = 8.dp,
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth()
