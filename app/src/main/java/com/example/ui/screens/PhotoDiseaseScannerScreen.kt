@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Warning
 import com.example.model.ThreatType
 import com.example.ui.components.DiseaseLifecycleStepper
+import com.example.ui.components.PestLifecycleWheelCard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -1090,7 +1091,11 @@ private fun ScanResultCard(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        DiseaseLifecycleStepper(threat = result.threat)
+                        if (result.threat.type == ThreatType.PEST) {
+                            PestLifecycleWheelCard(threat = result.threat)
+                        } else {
+                            DiseaseLifecycleStepper(threat = result.threat)
+                        }
                     }
                 }
             }

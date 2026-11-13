@@ -1,12 +1,13 @@
 package com.example.ui.screens.ai
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.speech.RecognizerIntent
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,17 +35,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Egg
 import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terrain
-import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,8 +59,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,10 +76,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.BuildConfig
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.ai.AiAgronomistService
+import com.example.data.voice.AgriculturalLanguagePack
+import com.example.data.voice.AppLanguage
+import com.example.data.voice.FarmTextToSpeechManager
 import com.example.model.ai.AiChatMessage
-import com.example.model.ai.AiQuickPrompt
 import kotlinx.coroutines.launch
 
 /**
@@ -88,6 +92,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AiAgronomistScreen(
+    appLanguage: AppLanguage = AppLanguage.EN,
+    onLanguageSelected: (AppLanguage) -> Unit = {},
     onNavigateToCalculator: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -97,6 +103,25 @@ fun AiAgronomistScreen(
 
     var inputQuestion by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
+    val ttsManager = remember(context) { FarmTextToSpeechManager(context) }
+    val isSpeaking by ttsManager.isSpeaking.collectAsStateWithLifecycle()
+    val speakingMessageId by ttsManager.speakingMessageId.collectAsStateWithLifecycle()
+
+    DisposableEffect(Unit) {
+        onDispose { ttsManager.shutdown() }
+    }
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spoken.isNullOrBlank()) {
+                inputQuestion = spoken
+            }
+        }
+    }
 
     // Initial welcome message from AI Agronomist
     var messages by remember {
@@ -135,8 +160,9 @@ fun AiAgronomistScreen(
 
         coroutineScope.launch {
             try {
+                val promptWithLanguage = AgriculturalLanguagePack.buildSpeechPromptPrefix(appLanguage) + q
                 val aiResponse = AiAgronomistService.askAgricultureAi(
-                    userQuestion = q,
+                    userQuestion = promptWithLanguage,
                     conversationHistory = messages
                 )
                 messages = messages + aiResponse
@@ -232,15 +258,46 @@ fun AiAgronomistScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Quick Prompt Chips
+                // Local Language Switcher Chips (EN / SW / LG / LUO)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppLanguage.values().forEach { lang ->
+                        FilterChip(
+                            selected = appLanguage == lang,
+                            onClick = { onLanguageSelected(lang) },
+                            label = { Text("${lang.code}: ${lang.nativeLabel}", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.testTag("ai_lang_${lang.code.lowercase()}")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Quick Prompt Chips (translated in selected language)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    AgriculturalLanguagePack.quickVoicePrompts.forEach { localized ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { sendQuestion(localized.textFor(appLanguage)) },
+                            leadingIcon = { Text("🎙️", fontSize = 13.sp) },
+                            label = { Text("${localized.topic} (${appLanguage.code})", style = MaterialTheme.typography.labelSmall) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            )
+                        )
+                    }
                     quickPrompts.forEach { prompt ->
                         FilterChip(
                             selected = false,
@@ -271,6 +328,14 @@ fun AiAgronomistScreen(
             items(messages, key = { it.id }) { message ->
                 AiMessageBubble(
                     message = message,
+                    isThisSpeaking = isSpeaking && speakingMessageId == message.id,
+                    onSpeakToggle = {
+                        if (isSpeaking && speakingMessageId == message.id) {
+                            ttsManager.stop()
+                        } else {
+                            ttsManager.speak(message.text, appLanguage, message.id)
+                        }
+                    },
                     onNavigateToCalculator = onNavigateToCalculator,
                     onCopyText = { text ->
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -323,7 +388,14 @@ fun AiAgronomistScreen(
                 OutlinedTextField(
                     value = inputQuestion,
                     onValueChange = { inputQuestion = it },
-                    placeholder = { Text("Ask about crops, pests, dosing, poultry, soil...", style = MaterialTheme.typography.bodyMedium) },
+                    placeholder = {
+                        Text(
+                            text = AgriculturalLanguagePack.uiLabels["voice_tip"]?.textFor(appLanguage)
+                                ?: "Ask about crops, pests, dosing, poultry, soil...",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1
+                        )
+                    },
                     singleLine = false,
                     maxLines = 3,
                     shape = RoundedCornerShape(24.dp),
@@ -338,7 +410,30 @@ fun AiAgronomistScreen(
                         .testTag("input_ai_question")
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+
+                IconButton(
+                    onClick = {
+                        try {
+                            voiceLauncher.launch(FarmTextToSpeechManager.buildVoiceRecognitionIntent(appLanguage))
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Speech recognition unavailable on this device", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .testTag("button_voice_input_ai")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Voice Input (${appLanguage.displayName})",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 IconButton(
                     onClick = { sendQuestion(inputQuestion) },
@@ -368,6 +463,8 @@ fun AiAgronomistScreen(
 @Composable
 private fun AiMessageBubble(
     message: AiChatMessage,
+    isThisSpeaking: Boolean = false,
+    onSpeakToggle: () -> Unit = {},
     onNavigateToCalculator: (String) -> Unit,
     onCopyText: (String) -> Unit,
     onSelectFollowUp: (String) -> Unit
@@ -432,16 +529,29 @@ private fun AiMessageBubble(
                             )
                         }
 
-                        IconButton(
-                            onClick = { onCopyText(message.text) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy Advice",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(14.dp)
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(
+                                onClick = onSpeakToggle,
+                                modifier = Modifier.size(28.dp).testTag("btn_tts_${message.id}")
+                            ) {
+                                Icon(
+                                    imageVector = if (isThisSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                    contentDescription = if (isThisSpeaking) "Stop Reading" else "Read Aloud",
+                                    tint = if (isThisSpeaking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onCopyText(message.text) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy Advice",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))

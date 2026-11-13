@@ -1,7 +1,15 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material.icons.filled.Mic
+import com.example.data.voice.AppLanguage
+import com.example.data.voice.FarmTextToSpeechManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -999,12 +1007,34 @@ fun NotebookEntryEditorDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Detailed Remarks Column
+                // Detailed Remarks Column with Voice Dictation
+                val context = LocalContext.current
+                val voiceRemarksLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) { res ->
+                    if (res.resultCode == Activity.RESULT_OK) {
+                        val spoken = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+                        if (!spoken.isNullOrBlank()) {
+                            remarks = if (remarks.isBlank()) spoken else "$remarks $spoken"
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = remarks,
                     onValueChange = { remarks = it },
                     label = { Text("Field Observations & Remarks Column") },
-                    placeholder = { Text("Enter detailed observations, leaf symptom descriptions, or next scouting date...") },
+                    placeholder = { Text("Enter detailed observations or tap mic to dictate...") },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            try {
+                                voiceRemarksLauncher.launch(FarmTextToSpeechManager.buildVoiceRecognitionIntent(AppLanguage.EN))
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Voice dictation unavailable", Toast.LENGTH_SHORT).show()
+                            }
+                        }) {
+                            Icon(Icons.Default.Mic, contentDescription = "Dictate Remarks", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    },
                     minLines = 3,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()

@@ -78,6 +78,7 @@ fun LibraryScreen(
     onSearchQueryChange: (String) -> Unit = {},
     onThreatClick: (CropThreat) -> Unit,
     onNavigateToDiagnose: () -> Unit,
+    onOpenFeature: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -254,6 +255,34 @@ fun LibraryScreen(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Quick-Launch Farmer Suite Tools Strip
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val toolShortcuts = listOf(
+                        "SMART_ALERTS" to "🔔 PHI & Alerts",
+                        "CROP_SEASONS" to "🌱 Crop Seasons",
+                        "ECONOMICS" to "💰 Budget & ROI",
+                        "LIVESTOCK" to "🐄 Dairy/Goat/Pig",
+                        "POST_HARVEST" to "🌾 Storage & PICS",
+                        "AI_AGRONOMIST" to "🎙️ Voice Ask AI",
+                        "CLOUD_SYNC" to "☁️ Cloud Sync"
+                    )
+                    toolShortcuts.forEach { (route, label) ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { onOpenFeature(route) },
+                            label = { Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold) },
+                            modifier = Modifier.testTag("home_shortcut_${route.lowercase()}")
+                        )
                     }
                 }
 

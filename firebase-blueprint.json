@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "FarmerProfile": {
+      "title": "FarmerProfile",
+      "description": "Authenticated farmer account profile and farm metadata.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID matching document ID" },
+        "displayName": { "type": "string", "description": "Farmer or manager display name" },
+        "farmName": { "type": "string", "description": "Name of farm or cooperative" },
+        "county": { "type": "string", "description": "Agricultural county or district" },
+        "preferredLanguage": { "type": "string", "description": "EN, SW, LG, or LUO" },
+        "role": { "type": "string", "enum": ["farmer", "advisor"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "farmName", "county", "preferredLanguage", "role", "createdAt"]
+    },
+    "CloudFarmRecord": {
+      "title": "CloudFarmRecord",
+      "description": "Synced farm record (Field Note, PHI Spray Log, Crop Season, Livestock Log, Budget, or Storage Lot).",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "recordType": {
+          "type": "string",
+          "enum": ["FIELD_NOTE", "PHI_SPRAY", "CROP_SEASON", "LIVESTOCK", "BUDGET", "STORAGE_LOT"]
+        },
+        "title": { "type": "string" },
+        "cropOrSpecies": { "type": "string" },
+        "summary": { "type": "string" },
+        "payloadJson": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "recordType", "title", "cropOrSpecies", "summary", "payloadJson", "createdAt", "updatedAt"]
+    },
+    "ExtensionReport": {
+      "title": "ExtensionReport",
+      "description": "Field agronomy report shared with an agricultural extension officer or cooperative advisor.",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string" },
+        "farmerName": { "type": "string" },
+        "county": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "advisorEmail": { "type": "string" },
+        "advisorNotes": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "REVIEWED", "RESOLVED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmerId", "farmerName", "county", "title", "summary", "advisorEmail", "advisorNotes", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/FarmerProfile" },
+      "description": "Farmer profile document owned by userId."
+    },
+    "/users/{userId}/farm_records/{recordId}": {
+      "schema": { "$ref": "#/entities/CloudFarmRecord" },
+      "description": "User-scoped cloud farm backup records."
+    },
+    "/extension_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ExtensionReport" },
+      "description": "Shareable extension officer inspection reports."
+    }
+  }
+}

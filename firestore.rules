@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'farmName', 'county', 'preferredLanguage', 'role', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'farmName', 'county', 'preferredLanguage', 'role', 'createdAt'])
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100
+        && data.farmName is string && data.farmName.size() <= 100
+        && data.county is string && data.county.size() <= 80
+        && data.preferredLanguage in ['EN', 'SW', 'LG', 'LUO']
+        && data.role == 'farmer'
+        && data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidFarmRecord(data, userId) {
+      return data.keys().hasAll(['ownerId', 'recordType', 'title', 'cropOrSpecies', 'summary', 'payloadJson', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'recordType', 'title', 'cropOrSpecies', 'summary', 'payloadJson', 'createdAt', 'updatedAt'])
+        && data.ownerId == userId
+        && data.ownerId == request.auth.uid
+        && data.recordType in ['FIELD_NOTE', 'PHI_SPRAY', 'CROP_SEASON', 'LIVESTOCK', 'BUDGET', 'STORAGE_LOT']
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 150
+        && data.cropOrSpecies is string && data.cropOrSpecies.size() <= 80
+        && data.summary is string && data.summary.size() <= 1200
+        && data.payloadJson is string && data.payloadJson.size() <= 4000
+        && data.createdAt is timestamp && data.createdAt <= request.time
+        && data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidExtensionReport(data) {
+      return data.keys().hasAll(['farmerId', 'farmerName', 'county', 'title', 'summary', 'advisorEmail', 'advisorNotes', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['farmerId', 'farmerName', 'county', 'title', 'summary', 'advisorEmail', 'advisorNotes', 'status', 'createdAt', 'updatedAt'])
+        && data.farmerId is string && data.farmerId.size() > 0 && data.farmerId.size() <= 128
+        && data.farmerName is string && data.farmerName.size() > 0 && data.farmerName.size() <= 100
+        && data.county is string && data.county.size() <= 80
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 150
+        && data.summary is string && data.summary.size() > 0 && data.summary.size() <= 2000
+        && data.advisorEmail is string && data.advisorEmail.size() <= 150
+        && data.advisorNotes is string && data.advisorNotes.size() <= 1500
+        && data.status in ['OPEN', 'REVIEWED', 'RESOLVED']
+        && data.createdAt is timestamp && data.createdAt <= request.time
+        && data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isVerifiedAdvisorFor(docData) {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && docData.advisorEmail is string
+        && docData.advisorEmail != ''
+        && docData.advisorEmail == request.auth.token.email;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidProfile(incoming(), userId);
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().role == existing().role
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'farmName', 'county', 'preferredLanguage']);
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      match /farm_records/{recordId} {
+        allow get, list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(recordId) && isOwner(userId) && isValidFarmRecord(incoming(), userId);
+        allow update: if isValidId(userId)
+          && isValidId(recordId)
+          && isOwner(userId)
+          && isValidFarmRecord(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recordType', 'title', 'cropOrSpecies', 'summary', 'payloadJson', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(recordId) && isOwner(userId);
+      }
+    }
+
+    match /extension_reports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn()
+        && (existing().farmerId == request.auth.uid || isVerifiedAdvisorFor(existing()));
+      allow list: if isSignedIn()
+        && (resource.data.farmerId == request.auth.uid || isVerifiedAdvisorFor(resource.data));
+      allow create: if isValidId(reportId)
+        && isSignedIn()
+        && isValidExtensionReport(incoming())
+        && incoming().farmerId == request.auth.uid
+        && incoming().status == 'OPEN';
+      allow update: if isValidId(reportId)
+        && isSignedIn()
+        && isValidExtensionReport(incoming())
+        && incoming().farmerId == existing().farmerId
+        && incoming().createdAt == existing().createdAt
+        && (
+          (existing().farmerId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['farmerName', 'county', 'title', 'summary', 'advisorEmail', 'status', 'updatedAt']))
+          ||
+          (isVerifiedAdvisorFor(existing())
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['advisorNotes', 'status', 'updatedAt']))
+        );
+      allow delete: if isValidId(reportId) && isSignedIn() && existing().farmerId == request.auth.uid;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

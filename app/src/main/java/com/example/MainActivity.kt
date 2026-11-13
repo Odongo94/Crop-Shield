@@ -29,11 +29,13 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Search
@@ -121,6 +123,24 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
     val globalSearchQuery by viewModel.globalSearchQuery.collectAsStateWithLifecycle()
     val globalSearchCategory by viewModel.globalSearchCategory.collectAsStateWithLifecycle()
     val unifiedSearchResults by viewModel.unifiedSearchResults.collectAsStateWithLifecycle()
+
+    // New Farmer Features State
+    val appLanguage by viewModel.appLanguage.collectAsStateWithLifecycle()
+    val phiLogs by viewModel.phiLogs.collectAsStateWithLifecycle()
+    val poultryBatches by viewModel.poultryBatches.collectAsStateWithLifecycle()
+    val activeSeasons by viewModel.activeSeasons.collectAsStateWithLifecycle()
+    val livestockBreeding by viewModel.livestockBreeding.collectAsStateWithLifecycle()
+    val savedFields by viewModel.savedFields.collectAsStateWithLifecycle()
+    val weatherState by viewModel.weatherState.collectAsStateWithLifecycle()
+    val selectedCounty by viewModel.selectedCounty.collectAsStateWithLifecycle()
+    val farmSizeHectares by viewModel.farmSizeHectares.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val cloudRecords by viewModel.cloudRecords.collectAsStateWithLifecycle()
+    val myExtensionReports by viewModel.myExtensionReports.collectAsStateWithLifecycle()
+    val advisorInboxReports by viewModel.advisorInboxReports.collectAsStateWithLifecycle()
+    val isCloudSyncing by viewModel.isCloudSyncing.collectAsStateWithLifecycle()
+    val cloudSyncMessage by viewModel.cloudSyncMessage.collectAsStateWithLifecycle()
+
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAgronomistDialog by remember { mutableStateOf(false) }
 
@@ -148,6 +168,12 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                 AppScreen.SCOUTING_SHEETS -> "Scouting Sheets & Protocols"
                                 AppScreen.AI_AGRONOMIST -> "Ask AI Agronomist"
                                 AppScreen.BIOSCIENCE_SKILLS -> "Bioscience Skills & Web Apps"
+                                AppScreen.SMART_ALERTS -> "PHI & Smart Farm Alerts"
+                                AppScreen.ECONOMICS -> "Farm Economics & ROI"
+                                AppScreen.CROP_SEASONS -> "Active Crop Seasons"
+                                AppScreen.LIVESTOCK -> "Livestock Ration & Breeding"
+                                AppScreen.POST_HARVEST -> "Post-Harvest & Storage"
+                                AppScreen.CLOUD_SYNC -> "Cloud Backup & Advisor Sync"
                                 AppScreen.THREAT_DETAIL -> ""
                             },
                             style = MaterialTheme.typography.titleMedium,
@@ -155,6 +181,26 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                         )
                     },
                     actions = {
+                        IconButton(
+                            onClick = { viewModel.navigateTo(AppScreen.SMART_ALERTS) },
+                            modifier = Modifier.testTag("action_open_smart_alerts")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "Smart Farm Alerts & PHI",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.navigateTo(AppScreen.CLOUD_SYNC) },
+                            modifier = Modifier.testTag("action_open_cloud_sync")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudSync,
+                                contentDescription = "Cloud Backup & Sync",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         // 0. Bioscience Skills Action Button (Flask Icon)
                         IconButton(
                             onClick = { viewModel.navigateTo(AppScreen.BIOSCIENCE_SKILLS) },
@@ -395,7 +441,18 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             searchQuery = searchQuery,
                             onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
                             onThreatClick = { threat -> viewModel.openThreatDetail(threat) },
-                            onNavigateToDiagnose = { viewModel.navigateTo(AppScreen.DIAGNOSE) }
+                            onNavigateToDiagnose = { viewModel.navigateTo(AppScreen.DIAGNOSE) },
+                            onOpenFeature = { route ->
+                                when (route) {
+                                    "SMART_ALERTS" -> viewModel.navigateTo(AppScreen.SMART_ALERTS)
+                                    "CROP_SEASONS" -> viewModel.navigateTo(AppScreen.CROP_SEASONS)
+                                    "ECONOMICS" -> viewModel.navigateTo(AppScreen.ECONOMICS)
+                                    "LIVESTOCK" -> viewModel.navigateTo(AppScreen.LIVESTOCK)
+                                    "POST_HARVEST" -> viewModel.navigateTo(AppScreen.POST_HARVEST)
+                                    "AI_AGRONOMIST" -> viewModel.navigateTo(AppScreen.AI_AGRONOMIST)
+                                    "CLOUD_SYNC" -> viewModel.navigateTo(AppScreen.CLOUD_SYNC)
+                                }
+                            }
                         )
                     }
 
@@ -425,7 +482,6 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                     }
 
                     AppScreen.AGRONOMY -> {
-                        val farmSizeHectares by viewModel.farmSizeHectares.collectAsStateWithLifecycle()
                         val selectedCropPlan by viewModel.selectedCropPlan.collectAsStateWithLifecycle()
                         val selectedBasalProduct by viewModel.selectedBasalProduct.collectAsStateWithLifecycle()
                         val selectedTopdressProduct by viewModel.selectedTopdressProduct.collectAsStateWithLifecycle()
@@ -433,8 +489,6 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                         val filteredWeeds by viewModel.filteredWeeds.collectAsStateWithLifecycle()
                         val weedQuery by viewModel.weedQuery.collectAsStateWithLifecycle()
                         val selectedWeedType by viewModel.selectedWeedType.collectAsStateWithLifecycle()
-                        val selectedCounty by viewModel.selectedCounty.collectAsStateWithLifecycle()
-                        val weatherState by viewModel.weatherState.collectAsStateWithLifecycle()
 
                         AgronomyScreen(
                             farmSizeHectares = farmSizeHectares,
@@ -455,7 +509,35 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onWeedTypeSelected = { viewModel.setWeedTypeFilter(it) },
                             onCountySelected = { viewModel.fetchWeatherForCounty(it) },
                             onAutoDetectLocation = { viewModel.autoDetectFarmLocationAndFetchWeather() },
-                            onNavigateToFieldMap = { viewModel.navigateTo(AppScreen.FIELD_MAP) }
+                            onNavigateToFieldMap = { viewModel.navigateTo(AppScreen.FIELD_MAP) },
+                            phiLogs = phiLogs,
+                            poultryBatches = poultryBatches,
+                            activeSeasons = activeSeasons,
+                            mappedFields = savedFields,
+                            livestockBreeding = livestockBreeding,
+                            appLanguage = appLanguage,
+                            currentUser = currentUser,
+                            cloudRecords = cloudRecords,
+                            myReports = myExtensionReports,
+                            advisorInboxReports = advisorInboxReports,
+                            isCloudSyncing = isCloudSyncing,
+                            cloudSyncMessage = cloudSyncMessage,
+                            onLanguageSelected = { viewModel.setAppLanguage(it) },
+                            onAddPhiLog = { viewModel.addPhiLog(it) },
+                            onDeletePhiLog = { viewModel.deletePhiLog(it) },
+                            onAddPoultryBatch = { viewModel.addPoultryBatch(it) },
+                            onDeletePoultryBatch = { viewModel.deletePoultryBatch(it) },
+                            onAddCropSeason = { viewModel.addCropSeason(it) },
+                            onDeleteCropSeason = { viewModel.deleteCropSeason(it) },
+                            onAddBreedingRecord = { viewModel.addBreedingRecord(it) },
+                            onDeleteBreedingRecord = { viewModel.deleteBreedingRecord(it) },
+                            onSaveBudgetSummary = { t, c, s -> viewModel.saveBudgetToCloud(t, c, s) },
+                            onGoogleSignedIn = { viewModel.onGoogleSignedIn(it) },
+                            onBackupAllToCloud = { viewModel.backupAllFarmDataToCloud() },
+                            onDeleteCloudRecord = { viewModel.deleteCloudRecord(it) },
+                            onSubmitExtensionReport = { t, s, e -> viewModel.submitExtensionReport(t, s, e) },
+                            onReviewExtensionReport = { id, n, st -> viewModel.submitAdvisorReview(id, n, st) },
+                            onDeleteExtensionReport = { viewModel.deleteExtensionReport(it) }
                         )
                     }
 
@@ -560,6 +642,8 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
 
                     AppScreen.AI_AGRONOMIST -> {
                         com.example.ui.screens.ai.AiAgronomistScreen(
+                            appLanguage = appLanguage,
+                            onLanguageSelected = { viewModel.setAppLanguage(it) },
                             onNavigateToCalculator = { screenCode ->
                                 when (screenCode) {
                                     "SOIL_CALCULATOR" -> viewModel.navigateTo(AppScreen.SOIL_CALCULATOR)
@@ -574,6 +658,69 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                     AppScreen.BIOSCIENCE_SKILLS -> {
                         com.example.ui.screens.science.BioscienceSkillsScreen(
                             onNavigateBack = { viewModel.navigateBack() }
+                        )
+                    }
+
+                    AppScreen.SMART_ALERTS -> {
+                        com.example.ui.screens.alerts.SmartAlertsView(
+                            phiLogs = phiLogs,
+                            poultryBatches = poultryBatches,
+                            weatherState = weatherState,
+                            appLanguage = appLanguage,
+                            onAddPhiLog = { viewModel.addPhiLog(it) },
+                            onDeletePhiLog = { viewModel.deletePhiLog(it) },
+                            onAddPoultryBatch = { viewModel.addPoultryBatch(it) },
+                            onDeletePoultryBatch = { viewModel.deletePoultryBatch(it) }
+                        )
+                    }
+
+                    AppScreen.ECONOMICS -> {
+                        com.example.ui.screens.economics.FarmEconomicsScreen(
+                            initialHectares = farmSizeHectares,
+                            onSaveBudgetSummary = { t, c, s -> viewModel.saveBudgetToCloud(t, c, s) }
+                        )
+                    }
+
+                    AppScreen.CROP_SEASONS -> {
+                        com.example.ui.screens.season.CropSeasonTrackerView(
+                            seasons = activeSeasons,
+                            mappedFields = savedFields,
+                            onAddSeason = { viewModel.addCropSeason(it) },
+                            onDeleteSeason = { viewModel.deleteCropSeason(it) }
+                        )
+                    }
+
+                    AppScreen.LIVESTOCK -> {
+                        com.example.ui.screens.livestock.LivestockManagerView(
+                            breedingRecords = livestockBreeding,
+                            onAddBreedingRecord = { viewModel.addBreedingRecord(it) },
+                            onDeleteBreedingRecord = { viewModel.deleteBreedingRecord(it) }
+                        )
+                    }
+
+                    AppScreen.POST_HARVEST -> {
+                        com.example.ui.screens.postharvest.PostHarvestStorageView(
+                            appLanguage = appLanguage
+                        )
+                    }
+
+                    AppScreen.CLOUD_SYNC -> {
+                        com.example.ui.screens.cloud.CloudSyncScreen(
+                            currentUser = currentUser,
+                            cloudRecords = cloudRecords,
+                            myReports = myExtensionReports,
+                            advisorInboxReports = advisorInboxReports,
+                            appLanguage = appLanguage,
+                            selectedCountyName = selectedCounty.name,
+                            isSyncing = isCloudSyncing,
+                            syncStatusMessage = cloudSyncMessage,
+                            onLanguageSelected = { viewModel.setAppLanguage(it) },
+                            onSignedIn = { viewModel.onGoogleSignedIn(it) },
+                            onBackupAllToCloud = { viewModel.backupAllFarmDataToCloud() },
+                            onDeleteCloudRecord = { viewModel.deleteCloudRecord(it) },
+                            onSubmitExtensionReport = { t, s, e -> viewModel.submitExtensionReport(t, s, e) },
+                            onReviewExtensionReport = { id, n, st -> viewModel.submitAdvisorReview(id, n, st) },
+                            onDeleteExtensionReport = { viewModel.deleteExtensionReport(it) }
                         )
                     }
                 }

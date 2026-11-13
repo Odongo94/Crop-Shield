@@ -41,6 +41,22 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import com.example.data.alerts.FarmReminderEngine
+import com.example.data.firebase.CloudSyncRepository
+import com.example.data.livestock.LivestockRuminantSwineCatalog
+import com.example.data.season.CropStageEngine
+import com.example.data.voice.AppLanguage
+import com.example.model.alerts.PoultryBatchTracker
+import com.example.model.alerts.SprayPhiLog
+import com.example.model.cloud.CloudFarmRecord
+import com.example.model.cloud.ExtensionReport
+import com.example.model.livestock.LivestockBreedingRecord
+import com.example.model.season.ActiveCropSeason
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
+
 enum class AppScreen {
     LIBRARY,
     SCANNER,
@@ -55,7 +71,13 @@ enum class AppScreen {
     SCOUTING_SHEETS,
     THREAT_DETAIL,
     AI_AGRONOMIST,
-    BIOSCIENCE_SKILLS
+    BIOSCIENCE_SKILLS,
+    SMART_ALERTS,
+    ECONOMICS,
+    CROP_SEASONS,
+    LIVESTOCK,
+    POST_HARVEST,
+    CLOUD_SYNC
 }
 
 sealed class WeatherUiState {
@@ -116,6 +138,83 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
         _themeMode.value = mode
         prefs.edit().putString("app_theme_mode", mode.name).apply()
     }
+
+    // Preferred Voice & Advisory Language (EN, SW, LG, LUO)
+    private val _appLanguage = MutableStateFlow(
+        try {
+            AppLanguage.valueOf(prefs.getString("app_language", AppLanguage.EN.name) ?: AppLanguage.EN.name)
+        } catch (_: Exception) {
+            AppLanguage.EN
+        }
+    )
+    val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
+
+    fun setAppLanguage(language: AppLanguage) {
+        _appLanguage.value = language
+        prefs.edit().putString("app_language", language.name).apply()
+    }
+
+    // Feature 1: Smart Alerts (PHI Logs & Poultry Batches)
+    private val _phiLogs = MutableStateFlow(FarmReminderEngine.defaultSamplePhiLogs)
+    val phiLogs: StateFlow<List<SprayPhiLog>> = _phiLogs.asStateFlow()
+
+    private val _poultryBatches = MutableStateFlow(FarmReminderEngine.defaultSamplePoultryBatches)
+    val poultryBatches: StateFlow<List<PoultryBatchTracker>> = _poultryBatches.asStateFlow()
+
+    // Feature 3: Active Crop Seasons
+    private val _activeSeasons = MutableStateFlow(CropStageEngine.defaultSampleSeasons)
+    val activeSeasons: StateFlow<List<ActiveCropSeason>> = _activeSeasons.asStateFlow()
+
+    // Feature 5: Livestock Breeding Calendar
+    private val _livestockBreeding = MutableStateFlow(LivestockRuminantSwineCatalog.defaultSampleBreeding)
+    val livestockBreeding: StateFlow<List<LivestockBreedingRecord>> = _livestockBreeding.asStateFlow()
+
+    // Feature 7: Strictly Auth-Gated Firebase Cloud Sync
+    private val cloudSyncRepo: CloudSyncRepository? = try {
+        if (FirebaseApp.getApps(application).isNotEmpty()) {
+            CloudSyncRepository.create(application)
+        } else {
+            null
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    val currentUser: StateFlow<FirebaseUser?> = (cloudSyncRepo?.observeAuthState() ?: flowOf(null))
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val cloudRecords: StateFlow<List<CloudFarmRecord>> = currentUser
+        .flatMapLatest { user ->
+            val repo = cloudSyncRepo
+            if (user == null || repo == null) flowOf(emptyList())
+            else repo.observeFarmRecords().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val myExtensionReports: StateFlow<List<ExtensionReport>> = currentUser
+        .flatMapLatest { user ->
+            val repo = cloudSyncRepo
+            if (user == null || repo == null) flowOf(emptyList())
+            else repo.observeMyExtensionReports().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val advisorInboxReports: StateFlow<List<ExtensionReport>> = currentUser
+        .flatMapLatest { user ->
+            val repo = cloudSyncRepo
+            if (user == null || repo == null) flowOf(emptyList())
+            else repo.observeAdvisorInboxReports().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    private val _isCloudSyncing = MutableStateFlow(false)
+    val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing.asStateFlow()
+
+    private val _cloudSyncMessage = MutableStateFlow<String?>(null)
+    val cloudSyncMessage: StateFlow<String?> = _cloudSyncMessage.asStateFlow()
 
     // Universal Multi-Category Search
     private val _isGlobalSearchOpen = MutableStateFlow(false)
@@ -701,5 +800,202 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
             setCropPlan(matchedPlan)
         }
         navigateTo(AppScreen.CALCULATOR)
+    }
+
+    // =========================================================================
+    // NEW FARMER FEATURE ACTIONS (ALERTS, SEASONS, LIVESTOCK, CLOUD SYNC)
+    // =========================================================================
+    fun addPhiLog(log: SprayPhiLog) {
+        _phiLogs.value = listOf(log) + _phiLogs.value
+    }
+
+    fun deletePhiLog(id: String) {
+        _phiLogs.value = _phiLogs.value.filterNot { it.id == id }
+    }
+
+    fun addPoultryBatch(batch: PoultryBatchTracker) {
+        _poultryBatches.value = listOf(batch) + _poultryBatches.value
+    }
+
+    fun deletePoultryBatch(id: String) {
+        _poultryBatches.value = _poultryBatches.value.filterNot { it.id == id }
+    }
+
+    fun addCropSeason(season: ActiveCropSeason) {
+        _activeSeasons.value = listOf(season) + _activeSeasons.value
+    }
+
+    fun deleteCropSeason(id: String) {
+        _activeSeasons.value = _activeSeasons.value.filterNot { it.id == id }
+    }
+
+    fun addBreedingRecord(record: LivestockBreedingRecord) {
+        _livestockBreeding.value = listOf(record) + _livestockBreeding.value
+    }
+
+    fun deleteBreedingRecord(id: String) {
+        _livestockBreeding.value = _livestockBreeding.value.filterNot { it.id == id }
+    }
+
+    fun onGoogleSignedIn(user: FirebaseUser) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.ensureFarmerProfile(
+                    displayName = user.displayName ?: "CropShield Farmer",
+                    farmName = "${_selectedCounty.value.name} Shamba",
+                    county = _selectedCounty.value.name,
+                    preferredLanguage = _appLanguage.value.code
+                )
+                _cloudSyncMessage.value = "Connected to Firebase Cloud Sync."
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message ?: "Profile setup failed"
+            }
+        }
+    }
+
+    fun backupAllFarmDataToCloud() {
+        val repo = cloudSyncRepo ?: return
+        val user = currentUser.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _isCloudSyncing.value = true
+            _cloudSyncMessage.value = null
+            try {
+                repo.ensureFarmerProfile(
+                    displayName = user.displayName ?: "CropShield Farmer",
+                    farmName = "${_selectedCounty.value.name} Shamba",
+                    county = _selectedCounty.value.name,
+                    preferredLanguage = _appLanguage.value.code
+                )
+                var count = 0
+                fieldNotes.value.take(15).forEach { note ->
+                    repo.upsertFarmRecord(
+                        recordId = "note_${note.id}",
+                        recordType = "FIELD_NOTE",
+                        title = "${note.cropName}: ${note.pestOrDisease}",
+                        cropOrSpecies = note.cropName,
+                        summary = "${note.locationTag} — ${note.noteText.take(200)}",
+                        payloadJson = "{\"date\":\"${note.dateCreated}\"}"
+                    )
+                    count++
+                }
+                _phiLogs.value.forEach { phi ->
+                    repo.upsertFarmRecord(
+                        recordId = phi.id,
+                        recordType = "PHI_SPRAY",
+                        title = "${phi.cropName} (${phi.productName})",
+                        cropOrSpecies = phi.cropName,
+                        summary = "Plot: ${phi.fieldBlock} • ${phi.activeIngredient} • PHI ${phi.phiDays} days",
+                        payloadJson = "{\"phiDays\":${phi.phiDays}}"
+                    )
+                    count++
+                }
+                _activeSeasons.value.forEach { season ->
+                    repo.upsertFarmRecord(
+                        recordId = season.id,
+                        recordType = "CROP_SEASON",
+                        title = "${season.cropName} (${season.variety})",
+                        cropOrSpecies = season.cropName,
+                        summary = "${season.fieldName} • ${season.areaHectares} ha",
+                        payloadJson = "{\"hectares\":${season.areaHectares}}"
+                    )
+                    count++
+                }
+                _livestockBreeding.value.forEach { rec ->
+                    repo.upsertFarmRecord(
+                        recordId = rec.id,
+                        recordType = "LIVESTOCK",
+                        title = "${rec.animalNameOrTag} (${rec.species.name})",
+                        cropOrSpecies = rec.species.displayName,
+                        summary = "Expected birth in ${rec.daysRemaining} days",
+                        payloadJson = "{\"gestationDays\":${rec.species.gestationDays}}"
+                    )
+                    count++
+                }
+                _cloudSyncMessage.value = "Backed up $count farm records to Firebase."
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = "Sync failed: ${e.message}"
+            } finally {
+                _isCloudSyncing.value = false
+            }
+        }
+    }
+
+    fun saveBudgetToCloud(title: String, crop: String, summary: String) {
+        val repo = cloudSyncRepo ?: return
+        if (currentUser.value == null) {
+            _cloudSyncMessage.value = "Sign in on Cloud Sync tab to back up budgets."
+            navigateTo(AppScreen.CLOUD_SYNC)
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.upsertFarmRecord(
+                    recordId = "budget_${System.currentTimeMillis()}",
+                    recordType = "BUDGET",
+                    title = title,
+                    cropOrSpecies = crop,
+                    summary = summary,
+                    payloadJson = "{}"
+                )
+                _cloudSyncMessage.value = "Saved budget snapshot to cloud."
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = "Budget sync error: ${e.message}"
+            }
+        }
+    }
+
+    fun deleteCloudRecord(recordId: String) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.deleteFarmRecord(recordId)
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun submitExtensionReport(title: String, summary: String, advisorEmail: String) {
+        val repo = cloudSyncRepo ?: return
+        val user = currentUser.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.createExtensionReport(
+                    reportId = "rep_${System.currentTimeMillis()}",
+                    farmerName = user.displayName ?: "CropShield Farmer",
+                    county = _selectedCounty.value.name,
+                    title = title,
+                    summary = summary,
+                    advisorEmail = advisorEmail
+                )
+                _cloudSyncMessage.value = "Extension report shared successfully."
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = "Report failed: ${e.message}"
+            }
+        }
+    }
+
+    fun submitAdvisorReview(reportId: String, notes: String, status: String) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.submitAdvisorReview(reportId, notes, status)
+                _cloudSyncMessage.value = "Advisor feedback posted."
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = "Review failed: ${e.message}"
+            }
+        }
+    }
+
+    fun deleteExtensionReport(reportId: String) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.deleteExtensionReport(reportId)
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
     }
 }

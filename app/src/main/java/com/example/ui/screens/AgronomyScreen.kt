@@ -116,14 +116,44 @@ import com.example.model.WeedModel
 import com.example.model.WeedType
 import com.example.viewmodel.WeatherUiState
 
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Egg
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.ScrollableTabRow
+import com.example.data.alerts.FarmReminderEngine
+import com.example.data.livestock.LivestockRuminantSwineCatalog
+import com.example.data.local.entities.MappedFieldEntity
+import com.example.data.season.CropStageEngine
+import com.example.data.voice.AppLanguage
+import com.example.model.alerts.PoultryBatchTracker
+import com.example.model.alerts.SprayPhiLog
+import com.example.model.cloud.CloudFarmRecord
+import com.example.model.cloud.ExtensionReport
+import com.example.model.livestock.LivestockBreedingRecord
+import com.example.model.season.ActiveCropSeason
+import com.example.ui.screens.alerts.SmartAlertsView
+import com.example.ui.screens.cloud.CloudSyncScreen
+import com.example.ui.screens.economics.FarmEconomicsScreen
+import com.example.ui.screens.livestock.LivestockManagerView
+import com.example.ui.screens.postharvest.PostHarvestStorageView
+import com.example.ui.screens.season.CropSeasonTrackerView
+import com.google.firebase.auth.FirebaseUser
 
 enum class AgronomySubTab(val title: String, val icon: ImageVector) {
-    AI_ADVISORY("Ask AI", Icons.Default.Psychology),
+    AI_ADVISORY("Ask AI & Voice", Icons.Default.Psychology),
+    SMART_ALERTS("PHI & Alerts", Icons.Default.NotificationsActive),
+    CROP_SEASONS("Crop Seasons", Icons.Default.Spa),
+    ECONOMICS_ROI("Budget & ROI", Icons.Default.TrendingUp),
+    LIVESTOCK("Dairy/Goat/Pig", Icons.Default.Pets),
+    POST_HARVEST("Post-Harvest", Icons.Default.Inventory2),
+    CLOUD_SYNC("Cloud Sync", Icons.Default.CloudUpload),
     BIOSCIENCE_SKILLS("Bioscience Skills", Icons.Default.Science),
     CROP_GUIDES("Crop Library", Icons.Default.MenuBook),
     WEED_SOIL("Weed & Soil", Icons.Default.Grass),
@@ -157,6 +187,34 @@ fun AgronomyScreen(
     onCountySelected: (KenyaAgriculturalCounty) -> Unit,
     onAutoDetectLocation: () -> Unit,
     onNavigateToFieldMap: () -> Unit = {},
+    phiLogs: List<SprayPhiLog> = FarmReminderEngine.defaultSamplePhiLogs,
+    poultryBatches: List<PoultryBatchTracker> = FarmReminderEngine.defaultSamplePoultryBatches,
+    activeSeasons: List<ActiveCropSeason> = CropStageEngine.defaultSampleSeasons,
+    mappedFields: List<MappedFieldEntity> = emptyList(),
+    livestockBreeding: List<LivestockBreedingRecord> = LivestockRuminantSwineCatalog.defaultSampleBreeding,
+    appLanguage: AppLanguage = AppLanguage.EN,
+    currentUser: FirebaseUser? = null,
+    cloudRecords: List<CloudFarmRecord> = emptyList(),
+    myReports: List<ExtensionReport> = emptyList(),
+    advisorInboxReports: List<ExtensionReport> = emptyList(),
+    isCloudSyncing: Boolean = false,
+    cloudSyncMessage: String? = null,
+    onLanguageSelected: (AppLanguage) -> Unit = {},
+    onAddPhiLog: (SprayPhiLog) -> Unit = {},
+    onDeletePhiLog: (String) -> Unit = {},
+    onAddPoultryBatch: (PoultryBatchTracker) -> Unit = {},
+    onDeletePoultryBatch: (String) -> Unit = {},
+    onAddCropSeason: (ActiveCropSeason) -> Unit = {},
+    onDeleteCropSeason: (String) -> Unit = {},
+    onAddBreedingRecord: (LivestockBreedingRecord) -> Unit = {},
+    onDeleteBreedingRecord: (String) -> Unit = {},
+    onSaveBudgetSummary: (String, String, String) -> Unit = { _, _, _ -> },
+    onGoogleSignedIn: (FirebaseUser) -> Unit = {},
+    onBackupAllToCloud: () -> Unit = {},
+    onDeleteCloudRecord: (String) -> Unit = {},
+    onSubmitExtensionReport: (String, String, String) -> Unit = { _, _, _ -> },
+    onReviewExtensionReport: (String, String, String) -> Unit = { _, _, _ -> },
+    onDeleteExtensionReport: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var activeTab by remember { mutableStateOf(AgronomySubTab.WEED_SOIL) }
@@ -201,7 +259,71 @@ fun AgronomyScreen(
 
         when (activeTab) {
             AgronomySubTab.AI_ADVISORY -> {
-                com.example.ui.screens.ai.AiAgronomistScreen()
+                com.example.ui.screens.ai.AiAgronomistScreen(
+                    appLanguage = appLanguage,
+                    onLanguageSelected = onLanguageSelected
+                )
+            }
+
+            AgronomySubTab.SMART_ALERTS -> {
+                SmartAlertsView(
+                    phiLogs = phiLogs,
+                    poultryBatches = poultryBatches,
+                    weatherState = weatherState,
+                    appLanguage = appLanguage,
+                    onAddPhiLog = onAddPhiLog,
+                    onDeletePhiLog = onDeletePhiLog,
+                    onAddPoultryBatch = onAddPoultryBatch,
+                    onDeletePoultryBatch = onDeletePoultryBatch
+                )
+            }
+
+            AgronomySubTab.CROP_SEASONS -> {
+                CropSeasonTrackerView(
+                    seasons = activeSeasons,
+                    mappedFields = mappedFields,
+                    onAddSeason = onAddCropSeason,
+                    onDeleteSeason = onDeleteCropSeason
+                )
+            }
+
+            AgronomySubTab.ECONOMICS_ROI -> {
+                FarmEconomicsScreen(
+                    initialHectares = farmSizeHectares,
+                    onSaveBudgetSummary = onSaveBudgetSummary
+                )
+            }
+
+            AgronomySubTab.LIVESTOCK -> {
+                LivestockManagerView(
+                    breedingRecords = livestockBreeding,
+                    onAddBreedingRecord = onAddBreedingRecord,
+                    onDeleteBreedingRecord = onDeleteBreedingRecord
+                )
+            }
+
+            AgronomySubTab.POST_HARVEST -> {
+                PostHarvestStorageView(appLanguage = appLanguage)
+            }
+
+            AgronomySubTab.CLOUD_SYNC -> {
+                CloudSyncScreen(
+                    currentUser = currentUser,
+                    cloudRecords = cloudRecords,
+                    myReports = myReports,
+                    advisorInboxReports = advisorInboxReports,
+                    appLanguage = appLanguage,
+                    selectedCountyName = selectedCounty.name,
+                    isSyncing = isCloudSyncing,
+                    syncStatusMessage = cloudSyncMessage,
+                    onLanguageSelected = onLanguageSelected,
+                    onSignedIn = onGoogleSignedIn,
+                    onBackupAllToCloud = onBackupAllToCloud,
+                    onDeleteCloudRecord = onDeleteCloudRecord,
+                    onSubmitExtensionReport = onSubmitExtensionReport,
+                    onReviewExtensionReport = onReviewExtensionReport,
+                    onDeleteExtensionReport = onDeleteExtensionReport
+                )
             }
 
             AgronomySubTab.BIOSCIENCE_SKILLS -> {

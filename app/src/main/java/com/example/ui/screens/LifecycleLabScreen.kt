@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,6 +46,7 @@ import com.example.data.ThreatCatalog
 import com.example.model.CropThreat
 import com.example.model.ThreatType
 import com.example.ui.components.DiseaseLifecycleStepper
+import com.example.ui.components.PestLifecycleWheelCard
 
 @Composable
 fun LifecycleLabScreen(
@@ -55,12 +57,29 @@ fun LifecycleLabScreen(
     val threatsWithLifecycles = remember {
         ThreatCatalog.allThreats.filter { it.lifecycleStages.isNotEmpty() }
     }
-    var selectedThreatId by remember {
-        mutableStateOf(threatsWithLifecycles.firstOrNull()?.id ?: "")
+    var filterPestsOnly by remember { mutableStateOf(false) }
+    var useWheelViewForPests by remember { mutableStateOf(true) }
+
+    val displayedThreats = remember(filterPestsOnly, threatsWithLifecycles) {
+        if (filterPestsOnly) {
+            threatsWithLifecycles.filter { it.type == ThreatType.PEST }
+        } else {
+            threatsWithLifecycles
+        }
     }
 
-    val selectedThreat = remember(selectedThreatId) {
-        threatsWithLifecycles.find { it.id == selectedThreatId } ?: threatsWithLifecycles.first()
+    var selectedThreatId by remember {
+        mutableStateOf(
+            threatsWithLifecycles.firstOrNull { it.type == ThreatType.PEST }?.id
+                ?: threatsWithLifecycles.firstOrNull()?.id
+                ?: ""
+        )
+    }
+
+    val selectedThreat = remember(selectedThreatId, displayedThreats) {
+        displayedThreats.find { it.id == selectedThreatId }
+            ?: displayedThreats.firstOrNull()
+            ?: threatsWithLifecycles.first()
     }
 
     Column(
@@ -90,14 +109,42 @@ fun LifecycleLabScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Interactive stage progressor & cycle breaker for field decisions",
+                    text = "Interactive Egg→Larva→Pupa→Adult metamorphosis & cycle breaker",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Quick Filter & View Toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = !filterPestsOnly,
+                onClick = { filterPestsOnly = false },
+                label = { Text("All Organisms") }
+            )
+            FilterChip(
+                selected = filterPestsOnly,
+                onClick = { filterPestsOnly = true },
+                label = { Text("Crop Pests (Egg–Adult)") }
+            )
+            if (selectedThreat.type == ThreatType.PEST) {
+                FilterChip(
+                    selected = useWheelViewForPests,
+                    onClick = { useWheelViewForPests = !useWheelViewForPests },
+                    label = { Text(if (useWheelViewForPests) "View: Wheel Diagram" else "View: Linear Stepper") }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Organism Selector Carousel
         Text(
@@ -113,7 +160,7 @@ fun LifecycleLabScreen(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            threatsWithLifecycles.forEach { threat ->
+            displayedThreats.forEach { threat ->
                 val isSelected = threat.id == selectedThreat.id
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -146,13 +193,22 @@ fun LifecycleLabScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Interactive Stepped Component
-        DiseaseLifecycleStepper(
-            threat = selectedThreat,
-            onActiveIngredientClick = {
-                onNavigateToCalculator(selectedThreat)
-            }
-        )
+        // Interactive Metamorphosis Wheel for Crop Pests or Stepped Component
+        if (selectedThreat.type == ThreatType.PEST && useWheelViewForPests) {
+            PestLifecycleWheelCard(
+                threat = selectedThreat,
+                onActiveIngredientClick = {
+                    onNavigateToCalculator(selectedThreat)
+                }
+            )
+        } else {
+            DiseaseLifecycleStepper(
+                threat = selectedThreat,
+                onActiveIngredientClick = {
+                    onNavigateToCalculator(selectedThreat)
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

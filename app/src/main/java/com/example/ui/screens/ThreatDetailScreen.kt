@@ -93,6 +93,7 @@ import com.example.model.ChemicalRecommendation
 import com.example.model.CropThreat
 import com.example.model.ThreatType
 import com.example.ui.components.DiseaseLifecycleStepper
+import com.example.ui.components.PestLifecycleWheelCard
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -449,12 +450,21 @@ fun ThreatDetailScreen(
                 // TAB 0: Interactive Lifecycle Component
                 when (selectedTabIndex) {
                     0 -> {
-                        DiseaseLifecycleStepper(
-                            threat = threat,
-                            onActiveIngredientClick = { aiName ->
-                                selectedTabIndex = 2 // jump to chemicals tab
-                            }
-                        )
+                        if (threat.type == ThreatType.PEST) {
+                            PestLifecycleWheelCard(
+                                threat = threat,
+                                onActiveIngredientClick = { aiName ->
+                                    selectedTabIndex = 2 // jump to chemicals tab
+                                }
+                            )
+                        } else {
+                            DiseaseLifecycleStepper(
+                                threat = threat,
+                                onActiveIngredientClick = { aiName ->
+                                    selectedTabIndex = 2 // jump to chemicals tab
+                                }
+                            )
+                        }
                     }
 
                     // TAB 1: Infonet & IPM Strategy
