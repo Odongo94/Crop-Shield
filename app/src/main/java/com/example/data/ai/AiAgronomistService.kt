@@ -1,5 +1,6 @@
 package com.example.data.ai
 
+import android.graphics.Bitmap
 import android.util.Log
 import com.example.BuildConfig
 import com.example.data.AgronomyCatalog
@@ -7,12 +8,14 @@ import com.example.data.ThreatCatalog
 import com.example.data.compliance.AgriculturalAuditCatalog
 import com.example.data.poultry.PoultryManagementCatalog
 import com.example.data.quarantine.QuarantinePestCatalog
+import com.example.data.scanner.PhotoDiseaseScanner
 import com.example.data.science.WeedSoilScienceCatalog
 import com.example.data.soil.CecRebalanceCalculator
 import com.example.data.soil.IrrigationWaterCatalog
 import com.example.data.soil.OrganicManureCatalog
 import com.example.data.soil.SoilClassificationCatalog
 import com.example.model.DeveloperInfo
+import com.example.model.ThreatType
 import com.example.model.ai.AiChatMessage
 import com.example.model.ai.AiQuickPrompt
 import kotlinx.coroutines.Dispatchers
@@ -35,9 +38,9 @@ object AiAgronomistService {
     private const val TAG = "AiAgronomistService"
 
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
-        .writeTimeout(25, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     val quickPrompts: List<AiQuickPrompt> = listOf(
@@ -107,29 +110,47 @@ object AiAgronomistService {
     )
 
     /**
-     * Ask a question to the AI Agronomist.
-     * Uses Gemini 2.5 Flash online when available; falls back to offline engine seamlessly.
+     * Ask a question (optionally with an uploaded crop/pest/soil/livestock photo) to the AI Agronomist.
+     * Uses Gemini 2.5 Flash multimodal vision online when available; falls back seamlessly offline.
      */
     suspend fun askAgricultureAi(
         userQuestion: String,
-        conversationHistory: List<AiChatMessage> = emptyList()
+        conversationHistory: List<AiChatMessage> = emptyList(),
+        imageBitmap: Bitmap? = null
     ): AiChatMessage = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY.trim()
+        val effectiveQuestion = userQuestion.trim().ifBlank {
+            if (imageBitmap != null) {
+                "Analyze this uploaded agricultural photo carefully. Identify any crop pest, plant disease, nutrient deficiency, weed species, soil condition, or livestock issue visible, estimate severity, and provide organic/biocontrol and PCPB-registered agrochemical knapsack recommendations with Pre-Harvest Intervals."
+            } else {
+                ""
+            }
+        }
+
+        val apiKey = try {
+            BuildConfig.GEMINI_API_KEY.trim()
+        } catch (_: Throwable) {
+            ""
+        }
         val hasValidKey = apiKey.isNotBlank() &&
             !apiKey.equals("MY_GEMINI_API_KEY", ignoreCase = true) &&
             !apiKey.contains("placeholder", ignoreCase = true)
 
         if (hasValidKey) {
             try {
-                val geminiResponse = callGeminiAgronomistApi(userQuestion, conversationHistory, apiKey)
+                val geminiResponse = callGeminiAgronomistApi(
+                    question = effectiveQuestion,
+                    history = conversationHistory,
+                    apiKey = apiKey,
+                    imageBitmap = imageBitmap
+                )
                 if (geminiResponse != null && geminiResponse.isNotBlank()) {
                     return@withContext AiChatMessage(
                         text = geminiResponse,
                         isUser = false,
                         isOnlineGemini = true,
-                        topicCategory = detectTopicCategory(userQuestion),
-                        suggestedFollowUps = generateFollowUps(userQuestion),
-                        relatedCalculatorScreen = detectRelatedCalculator(userQuestion)
+                        topicCategory = if (imageBitmap != null) "Photo Vision Diagnosis" else detectTopicCategory(effectiveQuestion),
+                        suggestedFollowUps = generateFollowUps("$effectiveQuestion $geminiResponse"),
+                        relatedCalculatorScreen = detectRelatedCalculator("$effectiveQuestion $geminiResponse")
                     )
                 }
             } catch (e: Exception) {
@@ -137,27 +158,105 @@ object AiAgronomistService {
             }
         }
 
-        // Offline Fallback
-        val offlineResponse = generateOfflineAgronomicResponse(userQuestion)
+        // Offline Fallback (with real optical pattern analysis when a photo is attached)
+        val offlineResponse = if (imageBitmap != null) {
+            generateOfflineImageAnalysisResponse(effectiveQuestion, imageBitmap)
+        } else {
+            generateOfflineAgronomicResponse(effectiveQuestion)
+        }
         AiChatMessage(
             text = offlineResponse,
             isUser = false,
             isOnlineGemini = false,
-            topicCategory = detectTopicCategory(userQuestion),
-            suggestedFollowUps = generateFollowUps(userQuestion),
-            relatedCalculatorScreen = detectRelatedCalculator(userQuestion)
+            topicCategory = if (imageBitmap != null) "Offline Photo Diagnosis" else detectTopicCategory(effectiveQuestion),
+            suggestedFollowUps = generateFollowUps("$effectiveQuestion $offlineResponse"),
+            relatedCalculatorScreen = detectRelatedCalculator("$effectiveQuestion $offlineResponse")
         )
+    }
+
+    private suspend fun generateOfflineImageAnalysisResponse(
+        question: String,
+        imageBitmap: Bitmap
+    ): String {
+        val cropHint = detectCropHintFromQuery(question)
+        val diagnosis = PhotoDiseaseScanner.analyzeCropPhoto(
+            bitmap = imageBitmap,
+            cropHint = cropHint,
+            categoryFilter = null
+        )
+        return buildString {
+            append("### 📸 Shamba AI Visual Photo Analysis\n\n")
+            if (question.isNotBlank()) {
+                append("**Farmer Note:** *\"${question.take(180)}\"*\n\n")
+            }
+            append("**1. Identified Condition:** ${diagnosis.diseaseName} (*${diagnosis.scientificName}*)\n")
+            append("• **Category:** ${diagnosis.diagnosticCategory.label}\n")
+            append("• **Crop / Context:** ${diagnosis.crop}\n")
+            append("• **Confidence:** ${diagnosis.confidencePercent}% • **Severity:** ${diagnosis.severity}\n\n")
+
+            if (diagnosis.visualSymptomsDetected.isNotEmpty()) {
+                append("**2. Visual Symptoms & Diagnostic Signals:**\n")
+                diagnosis.visualSymptomsDetected.forEach { symptom ->
+                    append("• $symptom\n")
+                }
+                append("\n")
+            }
+
+            append("**3. Cultural & Organic IPM Action:**\n")
+            append("• ${diagnosis.recommendedCulturalAction}\n")
+            if (diagnosis.infonetOrganicAction.isNotBlank()) {
+                append("• **Infonet-Biovision Practice:** ${diagnosis.infonetOrganicAction}\n")
+            }
+            if (diagnosis.cabiBiocontrolSolution.isNotBlank()) {
+                append("• **Biological Control (CABI):** ${diagnosis.cabiBiocontrolSolution}\n")
+            }
+            append("\n")
+
+            if (diagnosis.recommendedChemicals.isNotEmpty()) {
+                append("**4. Registered Agrochemical & Knapsack Guidance:**\n")
+                diagnosis.recommendedChemicals.forEach { chem ->
+                    append("• $chem\n")
+                }
+                diagnosis.recommendedChemicalObject?.let { rec ->
+                    append("• **Safety Check:** PHI ${rec.phiDays} days • REI ${rec.reiHours} hours • ${rec.chemicalGroup}\n")
+                }
+                append("\n")
+            }
+
+            append("💡 *${diagnosis.detailedAnalysisText}*\n\n")
+            append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+        }
+    }
+
+    private fun detectCropHintFromQuery(query: String): String {
+        val q = query.lowercase()
+        return when {
+            q.contains("tomato") -> "Tomato"
+            q.contains("maize") || q.contains("corn") -> "Maize / Cereals"
+            q.contains("potato") -> "Potato"
+            q.contains("rose") -> "Roses (Cut Flowers)"
+            q.contains("bean") -> "French Beans / Legumes"
+            q.contains("cabbage") || q.contains("kale") || q.contains("sukuma") -> "Cabbage / Brassicas"
+            q.contains("onion") || q.contains("garlic") -> "Onion & Garlic"
+            q.contains("pepper") || q.contains("chilli") || q.contains("capsicum") -> "Pepper"
+            q.contains("wheat") || q.contains("barley") -> "Wheat & Barley"
+            else -> "Auto-Detect"
+        }
     }
 
     private fun callGeminiAgronomistApi(
         question: String,
         history: List<AiChatMessage>,
-        apiKey: String
+        apiKey: String,
+        imageBitmap: Bitmap? = null
     ): String? {
         val systemPrompt = buildString {
-            append("You are 'CropShield AI Agronomist', an expert tropical, East African, and international Senior Agronomist, Plant Pathologist, Soil Scientist, and Livestock Advisor. ")
+            append("You are 'CropShield AI Agronomist', an expert tropical, East African, and international Senior Agronomist, Plant Pathologist, Entomologist, Soil Scientist, and Livestock Advisor. ")
             append("You serve smallholder and commercial farmers, extension officers, and field scouts. ")
             append("Always provide clear, authoritative, practical, and mathematically precise advice. ")
+            if (imageBitmap != null) {
+                append("An agricultural image/photo is attached. Examine the image closely: identify the crop, pest, insect stage, disease lesion, weed species, nutrient deficiency chlorosis/necrosis pattern, soil texture/crusting, or livestock sign; state confidence level and visual evidence before giving treatment. ")
+            }
             append("When answering pest or disease questions: ")
             append("1. Clearly identify the organism and characteristic damage symptoms. ")
             append("2. Provide Cultural and Organic IPM controls (crop rotation, spacing, sanitation, push-pull, resistant varieties). ")
@@ -178,22 +277,33 @@ object AiAgronomistService {
         val recentHistory = history.takeLast(4)
         recentHistory.forEach { msg ->
             val role = if (msg.isUser) "user" else "model"
+            val textSummary = if (msg.attachedImage != null) "[Attached Photo] ${msg.text}" else msg.text
             contentsArray.put(JSONObject().apply {
                 put("role", role)
                 put("parts", JSONArray().apply {
-                    put(JSONObject().apply { put("text", msg.text) })
+                    put(JSONObject().apply { put("text", textSummary) })
                 })
             })
         }
 
-        // Current user message with system instruction context
+        // Current user message with system instruction context (+ optional inlineData image)
+        val currentParts = JSONArray().apply {
+            put(JSONObject().apply {
+                put("text", "System Instruction: $systemPrompt\n\nFarmer Question: $question")
+            })
+            if (imageBitmap != null) {
+                val base64Image = PhotoDiseaseScanner.bitmapToBase64(imageBitmap, 1024)
+                put(JSONObject().apply {
+                    put("inlineData", JSONObject().apply {
+                        put("mimeType", "image/jpeg")
+                        put("data", base64Image)
+                    })
+                })
+            }
+        }
         contentsArray.put(JSONObject().apply {
             put("role", "user")
-            put("parts", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("text", "System Instruction: $systemPrompt\n\nFarmer Question: $question")
-                })
-            })
+            put("parts", currentParts)
         })
 
         val jsonBody = JSONObject().apply {

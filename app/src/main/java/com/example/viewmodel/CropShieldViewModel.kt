@@ -46,22 +46,36 @@ import com.example.data.firebase.CloudSyncRepository
 import com.example.data.livestock.LivestockRuminantSwineCatalog
 import com.example.data.season.CropStageEngine
 import com.example.data.voice.AppLanguage
+import com.example.model.DeveloperInfo
 import com.example.model.alerts.PoultryBatchTracker
 import com.example.model.alerts.SprayPhiLog
+import com.example.model.cloud.AdminNotification
+import com.example.model.cloud.AppFeedback
 import com.example.model.cloud.CloudFarmRecord
+import com.example.model.cloud.CommunityMessage
+import com.example.model.cloud.DirectMessage
+import com.example.model.cloud.DirectThread
 import com.example.model.cloud.ExtensionReport
+import com.example.model.cloud.FarmerRegistryEntry
 import com.example.model.livestock.LivestockBreedingRecord
 import com.example.model.season.ActiveCropSeason
+import com.example.ui.components.FarmerRegistrationInput
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+
+import com.example.data.ai.CommunityAiModerator
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 enum class AppScreen {
     LIBRARY,
     SCANNER,
     DIAGNOSE,
     AGRONOMY,
+    AGRONOMY_PACK,
     FIELD_MAP,
     LIFECYCLE_LAB,
     CALCULATOR,
@@ -77,7 +91,9 @@ enum class AppScreen {
     CROP_SEASONS,
     LIVESTOCK,
     POST_HARVEST,
-    CLOUD_SYNC
+    CLOUD_SYNC,
+    COMMUNITY_HUB,
+    ADMIN_CONSOLE
 }
 
 sealed class WeatherUiState {
@@ -183,6 +199,12 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
     val currentUser: StateFlow<FirebaseUser?> = (cloudSyncRepo?.observeAuthState() ?: flowOf(null))
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
 
+    val isSuperAdmin: StateFlow<Boolean> = currentUser
+        .map { user ->
+            user != null && user.isEmailVerified && user.email.equals(DeveloperInfo.EMAIL, ignoreCase = true)
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = false)
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val cloudRecords: StateFlow<List<CloudFarmRecord>> = currentUser
         .flatMapLatest { user ->
@@ -210,6 +232,77 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
         }
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val farmerRegistry: StateFlow<List<FarmerRegistryEntry>> = isSuperAdmin
+        .flatMapLatest { admin ->
+            val repo = cloudSyncRepo
+            if (!admin || repo == null) flowOf(emptyList())
+            else repo.observeAllFarmerRegistry().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val adminNotifications: StateFlow<List<AdminNotification>> = isSuperAdmin
+        .flatMapLatest { admin ->
+            val repo = cloudSyncRepo
+            if (!admin || repo == null) flowOf(emptyList())
+            else repo.observeAdminNotifications().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val communityMessages: StateFlow<List<CommunityMessage>> = currentUser
+        .flatMapLatest { user ->
+            val repo = cloudSyncRepo
+            if (user == null || repo == null) flowOf(emptyList())
+            else repo.observeCommunityMessages().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val directThreads: StateFlow<List<DirectThread>> = isSuperAdmin
+        .flatMapLatest { admin ->
+            val repo = cloudSyncRepo
+            if (!admin || repo == null) flowOf(emptyList())
+            else repo.observeAllDirectThreadsForAdmin().catch { emit(emptyList()) }
+        }
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    private val _activeDirectThreadFarmerId = MutableStateFlow<String?>(null)
+    val activeDirectThreadFarmerId: StateFlow<String?> = _activeDirectThreadFarmerId.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val directMessages: StateFlow<List<DirectMessage>> = combine(
+        currentUser,
+        isSuperAdmin,
+        _activeDirectThreadFarmerId
+    ) { user, admin, selectedFarmerId ->
+        Triple(user, admin, selectedFarmerId)
+    }.flatMapLatest { (user, admin, selectedFarmerId) ->
+        val repo = cloudSyncRepo
+        if (user == null || repo == null) {
+            flowOf(emptyList())
+        } else {
+            val targetFarmerId = if (admin && !selectedFarmerId.isNullOrBlank()) selectedFarmerId else user.uid
+            repo.observeDirectMessages(targetFarmerId).catch { emit(emptyList()) }
+        }
+    }.stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    private val _localFeedbackCache = MutableStateFlow<List<AppFeedback>>(emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val appFeedbackList: StateFlow<List<AppFeedback>> = combine(
+        currentUser.flatMapLatest { user ->
+            val repo = cloudSyncRepo
+            if (user == null || repo == null) flowOf(emptyList())
+            else repo.observeFeedback().catch { emit(emptyList()) }
+        },
+        _localFeedbackCache
+    ) { remote, local ->
+        if (remote.isNotEmpty()) remote else local
+    }.stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    private val _registeredLocality = MutableStateFlow("")
     private val _isCloudSyncing = MutableStateFlow(false)
     val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing.asStateFlow()
 
@@ -556,6 +649,9 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
     private val _weatherState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
     val weatherState: StateFlow<WeatherUiState> = _weatherState.asStateFlow()
 
+    private var communityAiTimerJob: Job? = null
+    private val processedAiActionIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     init {
         // Ensure Room database is seeded with complete threat metadata, lifecycles, and IPM solutions
         viewModelScope.launch {
@@ -575,8 +671,69 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
             )
         }
 
+        // Observe community messages to fact-check invalid farmer claims & auto-answer unanswered questions after 5 minutes
+        viewModelScope.launch(Dispatchers.IO) {
+            communityMessages.collect { messages ->
+                processCommunityAiModeration(messages)
+            }
+        }
+
         // Initialize weather with default hub
         fetchWeatherForCounty(_selectedCounty.value)
+    }
+
+    private suspend fun processCommunityAiModeration(messages: List<CommunityMessage>) {
+        val repo = cloudSyncRepo ?: return
+        if (currentUser.value == null || messages.isEmpty()) {
+            communityAiTimerJob?.cancel()
+            return
+        }
+
+        val existingIds = messages.map { it.id }.toSet()
+
+        // 1. Fact-check and correct any invalid/unsafe farmer responses using existing app databases
+        messages.filter { it.authorRole == "farmer" && it.id.isNotBlank() }.forEach { msg ->
+            val corrId = CommunityAiModerator.aiCorrectionDocId(msg.id)
+            if (corrId !in existingIds && corrId !in processedAiActionIds) {
+                val issue = CommunityAiModerator.detectInvalidFarmerResponse(msg)
+                if (issue != null) {
+                    processedAiActionIds.add(corrId)
+                    try {
+                        val action = CommunityAiModerator.buildFactCheckCorrection(msg, issue)
+                        repo.sendCommunityAiMessage(action.docId, action.topic, action.messageText)
+                    } catch (_: Exception) {
+                        processedAiActionIds.remove(corrId)
+                    }
+                }
+            }
+        }
+
+        // 2. Auto-respond to farmer questions unanswered for 5 minutes (300,000 ms)
+        val evaluation = CommunityAiModerator.evaluateUnansweredQuestions(
+            messages = messages,
+            nowMs = System.currentTimeMillis()
+        )
+        evaluation.readyQuestions.forEach { question ->
+            val respId = CommunityAiModerator.aiResponseDocId(question.id)
+            if (respId !in existingIds && respId !in processedAiActionIds) {
+                processedAiActionIds.add(respId)
+                try {
+                    val action = CommunityAiModerator.buildGroundedAiReply(question)
+                    repo.sendCommunityAiMessage(action.docId, action.topic, action.messageText)
+                } catch (_: Exception) {
+                    processedAiActionIds.remove(respId)
+                }
+            }
+        }
+
+        communityAiTimerJob?.cancel()
+        val waitMs = evaluation.nextDueDelayMs
+        if (waitMs != null) {
+            communityAiTimerJob = viewModelScope.launch(Dispatchers.IO) {
+                delay(waitMs + 300L)
+                processCommunityAiModeration(communityMessages.value)
+            }
+        }
     }
 
     fun onSearchQueryChange(query: String) {
@@ -837,19 +994,188 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
         _livestockBreeding.value = _livestockBreeding.value.filterNot { it.id == id }
     }
 
-    fun onGoogleSignedIn(user: FirebaseUser) {
+    fun onGoogleSignedIn(user: FirebaseUser, registrationInput: FarmerRegistrationInput? = null) {
         val repo = cloudSyncRepo ?: return
+        val countyObj = registrationInput?.county ?: _selectedCounty.value
+        val displayName = registrationInput?.displayName?.ifBlank { user.displayName ?: "CropShield Farmer" }
+            ?: (user.displayName ?: "CropShield Farmer")
+        val farmName = registrationInput?.farmName?.ifBlank { "${countyObj.name} Shamba" }
+            ?: "${countyObj.name} Shamba"
+        val locality = registrationInput?.locality?.ifBlank { countyObj.name.substringBefore(" (") }
+            ?: countyObj.name.substringBefore(" (")
+        val lat = registrationInput?.latitude ?: countyObj.latitude
+        val lng = registrationInput?.longitude ?: countyObj.longitude
+        val crops = registrationInput?.primaryCrops ?: "Mixed Crops"
+
+        _selectedCounty.value = countyObj
+        _registeredLocality.value = locality
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 repo.ensureFarmerProfile(
-                    displayName = user.displayName ?: "CropShield Farmer",
-                    farmName = "${_selectedCounty.value.name} Shamba",
-                    county = _selectedCounty.value.name,
+                    displayName = displayName,
+                    farmName = farmName,
+                    county = countyObj.name,
                     preferredLanguage = _appLanguage.value.code
                 )
-                _cloudSyncMessage.value = "Connected to Firebase Cloud Sync."
+                val isNew = repo.registerOrCheckInFarmer(
+                    displayName = displayName,
+                    farmName = farmName,
+                    county = countyObj.name,
+                    locality = locality,
+                    latitude = lat,
+                    longitude = lng,
+                    primaryCrops = crops
+                )
+                _cloudSyncMessage.value = if (isNew) {
+                    "Registered $displayName ($locality) & synced with CropShield Cloud."
+                } else {
+                    "Signed in & synced with CropShield Cloud."
+                }
             } catch (e: Exception) {
                 _cloudSyncMessage.value = e.message ?: "Profile setup failed"
+            }
+        }
+    }
+
+    fun sendCommunityMessage(topic: String, messageText: String) {
+        val repo = cloudSyncRepo ?: return
+        val user = currentUser.value ?: return
+        if (messageText.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.sendCommunityMessage(
+                    authorName = user.displayName ?: "CropShield Farmer",
+                    county = _selectedCounty.value.name,
+                    topic = topic,
+                    messageText = messageText
+                )
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun toggleCommunitySolutionPin(messageId: String, pinned: Boolean) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.toggleCommunitySolutionPin(messageId, pinned)
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun deleteCommunityMessage(messageId: String) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.deleteCommunityMessage(messageId)
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun selectDirectThreadFarmer(farmerId: String) {
+        _activeDirectThreadFarmerId.value = farmerId
+    }
+
+    fun sendDirectMessageToAdmin(messageText: String) {
+        val repo = cloudSyncRepo ?: return
+        val user = currentUser.value ?: return
+        if (messageText.isBlank()) return
+        val locality = _registeredLocality.value.ifBlank { _selectedCounty.value.name.substringBefore(" (") }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.sendDirectMessage(
+                    farmerId = user.uid,
+                    farmerName = user.displayName ?: "CropShield Farmer",
+                    county = _selectedCounty.value.name,
+                    locality = locality,
+                    messageText = messageText
+                )
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun sendAdminDirectReply(
+        farmerId: String,
+        farmerName: String,
+        county: String,
+        locality: String,
+        messageText: String
+    ) {
+        val repo = cloudSyncRepo ?: return
+        if (messageText.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.sendDirectMessage(
+                    farmerId = farmerId,
+                    farmerName = farmerName,
+                    county = county,
+                    locality = locality,
+                    messageText = messageText
+                )
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun markAdminNotificationRead(notifId: String) {
+        val repo = cloudSyncRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.markNotificationRead(notifId)
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun submitAppFeedback(
+        featureSource: String,
+        questionOrTopic: String,
+        wasHelpful: Boolean,
+        improvementArea: String,
+        improvementSuggestion: String
+    ) {
+        val user = currentUser.value
+        val countyName = _selectedCounty.value.name
+        val locality = _registeredLocality.value.ifBlank { countyName.substringBefore(" (") }
+        val localItem = AppFeedback(
+            id = "local_${System.currentTimeMillis()}",
+            userId = user?.uid ?: "local_farmer",
+            farmerName = user?.displayName ?: "Local Farmer",
+            county = countyName,
+            featureSource = featureSource,
+            questionOrTopic = questionOrTopic,
+            wasHelpful = wasHelpful,
+            improvementArea = improvementArea,
+            improvementSuggestion = improvementSuggestion
+        )
+        _localFeedbackCache.value = listOf(localItem) + _localFeedbackCache.value
+
+        val repo = cloudSyncRepo ?: return
+        if (user == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repo.submitAppFeedback(
+                    farmerName = user.displayName ?: "CropShield Farmer",
+                    county = countyName,
+                    locality = locality,
+                    featureSource = featureSource,
+                    questionOrTopic = questionOrTopic,
+                    wasHelpful = wasHelpful,
+                    improvementArea = improvementArea,
+                    improvementSuggestion = improvementSuggestion
+                )
+            } catch (e: Exception) {
+                _cloudSyncMessage.value = e.message
             }
         }
     }

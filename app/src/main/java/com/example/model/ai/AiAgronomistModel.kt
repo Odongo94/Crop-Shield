@@ -1,5 +1,6 @@
 package com.example.model.ai
 
+import android.graphics.Bitmap
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -17,7 +18,9 @@ data class AiChatMessage(
     val isOnlineGemini: Boolean = false,
     val topicCategory: String = "General Agronomy",
     val suggestedFollowUps: List<String> = emptyList(),
-    val relatedCalculatorScreen: String? = null // e.g. "CALCULATOR", "SOIL_CALCULATOR", "NOZZLE", "POULTRY", "AUDIT"
+    val relatedCalculatorScreen: String? = null, // e.g. "CALCULATOR", "SOIL_CALCULATOR", "NOZZLE", "POULTRY", "AUDIT"
+    val attachedImage: Bitmap? = null,
+    val imageCaption: String? = null
 )
 
 data class AiQuickPrompt(

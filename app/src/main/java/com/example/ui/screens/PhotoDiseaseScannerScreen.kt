@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Warning
 import com.example.model.ThreatType
 import com.example.ui.components.DiseaseLifecycleStepper
+import com.example.ui.components.InlineHelpfulnessFeedbackBar
 import com.example.ui.components.PestLifecycleWheelCard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -121,7 +122,8 @@ fun PhotoDiseaseScannerScreen(
     onSaveToFieldNotes: (crop: String, threat: String) -> Unit,
     modifier: Modifier = Modifier,
     selectedCategoryFilter: ThreatType? = null,
-    onCategoryFilterSelected: (ThreatType?) -> Unit = {}
+    onCategoryFilterSelected: (ThreatType?) -> Unit = {},
+    onSubmitFeedback: (topic: String, wasHelpful: Boolean, area: String, suggestion: String) -> Unit = { _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     var showPermissionRationale by remember { mutableStateOf(false) }
@@ -794,7 +796,8 @@ fun PhotoDiseaseScannerScreen(
                 onSaveToFieldNotes = {
                     onSaveToFieldNotes(scanResult.crop, scanResult.diseaseName)
                 },
-                onScanAnother = onResetScan
+                onScanAnother = onResetScan,
+                onSubmitFeedback = onSubmitFeedback
             )
         }
     }
@@ -837,7 +840,8 @@ private fun ScanResultCard(
     onOpenThreatDetail: () -> Unit,
     onOpenCalculator: () -> Unit,
     onSaveToFieldNotes: () -> Unit,
-    onScanAnother: () -> Unit
+    onScanAnother: () -> Unit,
+    onSubmitFeedback: (topic: String, wasHelpful: Boolean, area: String, suggestion: String) -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -1481,6 +1485,20 @@ private fun ScanResultCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Scan Another Photo")
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                InlineHelpfulnessFeedbackBar(
+                    questionOrTopic = "${result.crop}: ${result.diseaseName}",
+                    testTagPrefix = "scanner_feedback",
+                    onSubmitFeedback = { helpful, area, suggestion ->
+                        onSubmitFeedback(
+                            "${result.crop}: ${result.diseaseName}",
+                            helpful,
+                            area,
+                            suggestion
+                        )
+                    }
+                )
             }
         }
     }

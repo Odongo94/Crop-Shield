@@ -52,10 +52,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Forum
+import com.example.data.AgronomyCatalog
 import com.example.data.firebase.GoogleAuthHelper
 import com.example.data.voice.AppLanguage
+import com.example.model.KenyaAgriculturalCounty
 import com.example.model.cloud.CloudFarmRecord
 import com.example.model.cloud.ExtensionReport
+import com.example.ui.components.AuthSignUpCard
+import com.example.ui.components.FarmerRegistrationInput
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 
@@ -76,12 +82,15 @@ fun CloudSyncScreen(
     onSubmitExtensionReport: (title: String, summary: String, advisorEmail: String) -> Unit,
     onReviewExtensionReport: (reportId: String, notes: String, status: String) -> Unit,
     onDeleteExtensionReport: (String) -> Unit,
+    selectedCounty: KenyaAgriculturalCounty = AgronomyCatalog.kenyanCounties.first(),
+    isSuperAdmin: Boolean = false,
+    onAuthWithRegistration: (FirebaseUser, FarmerRegistrationInput) -> Unit = { u, _ -> onSignedIn(u) },
+    onOpenCommunity: () -> Unit = {},
+    onOpenAdminConsole: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var isSigningIn by remember { mutableStateOf(false) }
-    var authError by remember { mutableStateOf<String?>(null) }
 
     var showShareReportDialog by remember { mutableStateOf(false) }
     var reviewingReport by remember { mutableStateOf<ExtensionReport?>(null) }
@@ -123,66 +132,14 @@ fun CloudSyncScreen(
         }
 
         if (currentUser == null) {
-            // Strict Auth Gate: NO Firestore calls or queries until Google Sign-In completes
+            // Strict Auth Gate: NO Firestore calls or queries until Google Email Sign-Up / Sign-In completes
             item {
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CloudUpload, contentDescription = "Cloud Sync", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Cloud Backup & Extension Officer Sync",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                        Text(
-                            text = "Sign in with Google to securely back up your Field Notes, Spray PHI logs, Crop Seasons, and Livestock breeding records to Firebase Firestore, and share reports directly with your Extension Officer.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
-                        )
-                        authError?.let { err ->
-                            Text(err, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                        }
-                        Button(
-                            onClick = {
-                                if (!isSigningIn) {
-                                    isSigningIn = true
-                                    authError = null
-                                    scope.launch {
-                                        val res = GoogleAuthHelper.signInWithGoogle(context)
-                                        isSigningIn = false
-                                        res.fold(
-                                            onSuccess = { user ->
-                                                onSignedIn(user)
-                                                Toast.makeText(context, "Signed in as ${user.displayName ?: user.email}", Toast.LENGTH_SHORT).show()
-                                            },
-                                            onFailure = { e -> authError = e.message ?: "Google Sign-In failed" }
-                                        )
-                                    }
-                                }
-                            },
-                            enabled = !isSigningIn,
-                            modifier = Modifier.fillMaxWidth().testTag("btn_google_sign_in")
-                        ) {
-                            if (isSigningIn) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Signing in with Google...")
-                            } else {
-                                Text("Sign in with Google to Sync")
-                            }
-                        }
+                AuthSignUpCard(
+                    selectedCounty = selectedCounty,
+                    onAuthCompleted = { user, reg ->
+                        onAuthWithRegistration(user, reg)
                     }
-                }
+                )
             }
         } else {
             // Signed-In Cloud Dashboard
@@ -250,6 +207,27 @@ fun CloudSyncScreen(
                                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Share Report")
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = onOpenCommunity,
+                                modifier = Modifier.weight(1f).testTag("btn_cloud_open_community")
+                            ) {
+                                Icon(Icons.Default.Forum, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Community & Direct Chat")
+                            }
+                            if (isSuperAdmin) {
+                                Button(
+                                    onClick = onOpenAdminConsole,
+                                    modifier = Modifier.weight(1f).testTag("btn_cloud_open_admin")
+                                ) {
+                                    Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Admin Map & DB")
+                                }
                             }
                         }
                     }

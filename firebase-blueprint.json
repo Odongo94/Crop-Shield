@@ -15,6 +15,112 @@
       },
       "required": ["uid", "displayName", "farmName", "county", "preferredLanguage", "role", "createdAt"]
     },
+    "FarmerRegistryEntry": {
+      "title": "FarmerRegistryEntry",
+      "description": "Private farmer directory storing verified emails and farm locality coordinates, readable only by the owner and the verified super admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "farmName": { "type": "string" },
+        "county": { "type": "string" },
+        "locality": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "primaryCrops": { "type": "string" },
+        "signInCount": { "type": "integer" },
+        "lastActiveAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "farmName", "county", "locality", "latitude", "longitude", "primaryCrops", "signInCount", "lastActiveAt", "createdAt"]
+    },
+    "AdminNotification": {
+      "title": "AdminNotification",
+      "description": "Activity alert sent to the super admin when farmers sign up, sign in, message directly, or submit feedback.",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string" },
+        "farmerName": { "type": "string" },
+        "farmerEmail": { "type": "string" },
+        "county": { "type": "string" },
+        "locality": { "type": "string" },
+        "eventType": { "type": "string", "enum": ["NEW_FARMER", "SIGN_IN", "DIRECT_MESSAGE", "FEEDBACK"] },
+        "summary": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmerId", "farmerName", "farmerEmail", "county", "locality", "eventType", "summary", "isRead", "createdAt"]
+    },
+    "CommunityMessage": {
+      "title": "CommunityMessage",
+      "description": "Shared agricultural problem-solving chat message between farmers and the super admin (contains no emails or precise GPS PII).",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorRole": { "type": "string", "enum": ["farmer", "super_admin"] },
+        "county": { "type": "string" },
+        "topic": { "type": "string" },
+        "messageText": { "type": "string" },
+        "isSolutionPinned": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "authorId", "authorName", "authorRole", "county", "topic", "messageText", "isSolutionPinned", "createdAt"]
+    },
+    "DirectThread": {
+      "title": "DirectThread",
+      "description": "Private 1-on-1 support thread metadata between a farmer and the super admin.",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string" },
+        "farmerName": { "type": "string" },
+        "county": { "type": "string" },
+        "locality": { "type": "string" },
+        "lastMessagePreview": { "type": "string" },
+        "lastSenderRole": { "type": "string", "enum": ["farmer", "super_admin"] },
+        "unreadByAdmin": { "type": "boolean" },
+        "unreadByFarmer": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmerId", "farmerName", "county", "locality", "lastMessagePreview", "lastSenderRole", "unreadByAdmin", "unreadByFarmer", "createdAt", "updatedAt"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "Individual message inside a private 1-on-1 farmer-admin thread.",
+      "type": "object",
+      "properties": {
+        "farmerId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["farmer", "super_admin"] },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmerId", "senderId", "senderName", "senderRole", "text", "createdAt"]
+    },
+    "AppFeedback": {
+      "title": "AppFeedback",
+      "description": "Helpfulness rating and app improvement suggestion collected while the app is under active development.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "farmerName": { "type": "string" },
+        "county": { "type": "string" },
+        "featureSource": {
+          "type": "string",
+          "enum": ["AI_AGRONOMIST", "PHOTO_SCANNER", "DIAGNOSE", "COMMUNITY_CHAT", "DIRECT_ADMIN", "GENERAL_APP"]
+        },
+        "questionOrTopic": { "type": "string" },
+        "wasHelpful": { "type": "boolean" },
+        "improvementArea": { "type": "string" },
+        "improvementSuggestion": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "farmerName", "county", "featureSource", "questionOrTopic", "wasHelpful", "improvementArea", "improvementSuggestion", "createdAt"]
+    },
     "CloudFarmRecord": {
       "title": "CloudFarmRecord",
       "description": "Synced farm record (Field Note, PHI Spray Log, Crop Season, Livestock Log, Budget, or Storage Lot).",
@@ -61,6 +167,30 @@
     "/users/{userId}/farm_records/{recordId}": {
       "schema": { "$ref": "#/entities/CloudFarmRecord" },
       "description": "User-scoped cloud farm backup records."
+    },
+    "/farmer_registry/{farmerId}": {
+      "schema": { "$ref": "#/entities/FarmerRegistryEntry" },
+      "description": "Super-admin-only searchable directory of farmer emails and farm locality coordinates."
+    },
+    "/admin_notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/AdminNotification" },
+      "description": "Super-admin activity alert queue for sign-ups, sign-ins, direct messages, and feedback."
+    },
+    "/community_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/CommunityMessage" },
+      "description": "Shared farmer + super-admin community problem-solving forum."
+    },
+    "/direct_threads/{farmerId}": {
+      "schema": { "$ref": "#/entities/DirectThread" },
+      "description": "Private 1-on-1 support thread metadata between farmerId and super admin."
+    },
+    "/direct_threads/{farmerId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectMessage" },
+      "description": "Messages inside a private 1-on-1 farmer-admin support thread."
+    },
+    "/app_feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/AppFeedback" },
+      "description": "Farmer helpfulness ratings and improvement suggestions for ongoing app development."
     },
     "/extension_reports/{reportId}": {
       "schema": { "$ref": "#/entities/ExtensionReport" },

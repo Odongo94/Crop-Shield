@@ -136,14 +136,15 @@ abstract class FirestoreEmulatorTestBase {
         return null
     }
 
-    protected fun verifyEmailInEmulator(idToken: String) {
+    protected fun verifyEmailInEmulator(uid: String) {
         val client = OkHttpClient()
         val body = JSONObject().apply {
-            put("idToken", idToken)
+            put("localId", uid)
             put("emailVerified", true)
         }.toString().toRequestBody("application/json".toMediaType())
         val req = Request.Builder()
-            .url("http://$AUTH_HOST:$AUTH_PORT/identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyDummyKeyForEmulatorTestsOnly")
+            .url("http://$AUTH_HOST:$AUTH_PORT/identitytoolkit.googleapis.com/v1/projects/$PROJECT_ID/accounts:update")
+            .header("Authorization", "Bearer owner")
             .post(body)
             .build()
         client.newCall(req).execute().close()

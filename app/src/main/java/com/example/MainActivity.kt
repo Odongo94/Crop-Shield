@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Agriculture
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.BrightnessAuto
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -135,11 +137,19 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
     val selectedCounty by viewModel.selectedCounty.collectAsStateWithLifecycle()
     val farmSizeHectares by viewModel.farmSizeHectares.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val isSuperAdmin by viewModel.isSuperAdmin.collectAsStateWithLifecycle()
     val cloudRecords by viewModel.cloudRecords.collectAsStateWithLifecycle()
     val myExtensionReports by viewModel.myExtensionReports.collectAsStateWithLifecycle()
     val advisorInboxReports by viewModel.advisorInboxReports.collectAsStateWithLifecycle()
     val isCloudSyncing by viewModel.isCloudSyncing.collectAsStateWithLifecycle()
     val cloudSyncMessage by viewModel.cloudSyncMessage.collectAsStateWithLifecycle()
+    val farmerRegistry by viewModel.farmerRegistry.collectAsStateWithLifecycle()
+    val adminNotifications by viewModel.adminNotifications.collectAsStateWithLifecycle()
+    val communityMessages by viewModel.communityMessages.collectAsStateWithLifecycle()
+    val directThreads by viewModel.directThreads.collectAsStateWithLifecycle()
+    val activeDirectFarmerId by viewModel.activeDirectThreadFarmerId.collectAsStateWithLifecycle()
+    val directMessages by viewModel.directMessages.collectAsStateWithLifecycle()
+    val appFeedbackList by viewModel.appFeedbackList.collectAsStateWithLifecycle()
 
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAgronomistDialog by remember { mutableStateOf(false) }
@@ -158,6 +168,7 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                 AppScreen.LIBRARY -> "CropShield IPM"
                                 AppScreen.SCANNER -> "Photo AI Disease Scanner"
                                 AppScreen.AGRONOMY -> "Agronomy & Farm Suite"
+                                AppScreen.AGRONOMY_PACK -> "Agronomy Y1–Y3 Complete Pack"
                                 AppScreen.FIELD_MAP -> "Offline Field & Zone Mapper"
                                 AppScreen.DIAGNOSE -> "Symptom Diagnosis"
                                 AppScreen.LIFECYCLE_LAB -> "Lifecycle Lab"
@@ -174,6 +185,8 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                 AppScreen.LIVESTOCK -> "Livestock Ration & Breeding"
                                 AppScreen.POST_HARVEST -> "Post-Harvest & Storage"
                                 AppScreen.CLOUD_SYNC -> "Cloud Backup & Advisor Sync"
+                                AppScreen.COMMUNITY_HUB -> "Shamba Community & Support"
+                                AppScreen.ADMIN_CONSOLE -> "Admin Map & Database"
                                 AppScreen.THREAT_DETAIL -> ""
                             },
                             style = MaterialTheme.typography.titleMedium,
@@ -181,6 +194,28 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                         )
                     },
                     actions = {
+                        if (isSuperAdmin) {
+                            IconButton(
+                                onClick = { viewModel.navigateTo(AppScreen.ADMIN_CONSOLE) },
+                                modifier = Modifier.testTag("action_open_admin_console")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AdminPanelSettings,
+                                    contentDescription = "Admin Console & Farmers Map",
+                                    tint = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { viewModel.navigateTo(AppScreen.COMMUNITY_HUB) },
+                            modifier = Modifier.testTag("action_open_community_hub")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Forum,
+                                contentDescription = "Community & Support Chat",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(
                             onClick = { viewModel.navigateTo(AppScreen.SMART_ALERTS) },
                             modifier = Modifier.testTag("action_open_smart_alerts")
@@ -444,6 +479,9 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onNavigateToDiagnose = { viewModel.navigateTo(AppScreen.DIAGNOSE) },
                             onOpenFeature = { route ->
                                 when (route) {
+                                    "AGRONOMY_PACK" -> viewModel.navigateTo(AppScreen.AGRONOMY_PACK)
+                                    "COMMUNITY_HUB" -> viewModel.navigateTo(AppScreen.COMMUNITY_HUB)
+                                    "ADMIN_CONSOLE" -> viewModel.navigateTo(AppScreen.ADMIN_CONSOLE)
                                     "SMART_ALERTS" -> viewModel.navigateTo(AppScreen.SMART_ALERTS)
                                     "CROP_SEASONS" -> viewModel.navigateTo(AppScreen.CROP_SEASONS)
                                     "ECONOMICS" -> viewModel.navigateTo(AppScreen.ECONOMICS)
@@ -452,8 +490,13 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                     "AI_AGRONOMIST" -> viewModel.navigateTo(AppScreen.AI_AGRONOMIST)
                                     "CLOUD_SYNC" -> viewModel.navigateTo(AppScreen.CLOUD_SYNC)
                                 }
-                            }
+                            },
+                            isSuperAdmin = isSuperAdmin
                         )
+                    }
+
+                    AppScreen.AGRONOMY_PACK -> {
+                        com.example.ui.screens.science.AgronomyDegreePackView()
                     }
 
                     AppScreen.SCANNER -> {
@@ -477,7 +520,10 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onOpenCalculator = { threat, chem -> viewModel.openCalculator(threat, chem) },
                             onSaveToFieldNotes = { crop, pest -> viewModel.openFieldNotes(crop, pest) },
                             selectedCategoryFilter = selectedCategoryFilter,
-                            onCategoryFilterSelected = { cat -> viewModel.setSelectedCategoryFilter(cat) }
+                            onCategoryFilterSelected = { cat -> viewModel.setSelectedCategoryFilter(cat) },
+                            onSubmitFeedback = { topic, helpful, area, suggestion ->
+                                viewModel.submitAppFeedback("PHOTO_SCANNER", topic, helpful, area, suggestion)
+                            }
                         )
                     }
 
@@ -537,7 +583,14 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onDeleteCloudRecord = { viewModel.deleteCloudRecord(it) },
                             onSubmitExtensionReport = { t, s, e -> viewModel.submitExtensionReport(t, s, e) },
                             onReviewExtensionReport = { id, n, st -> viewModel.submitAdvisorReview(id, n, st) },
-                            onDeleteExtensionReport = { viewModel.deleteExtensionReport(it) }
+                            onDeleteExtensionReport = { viewModel.deleteExtensionReport(it) },
+                            isSuperAdmin = isSuperAdmin,
+                            onGoogleAuthCompleted = { user, reg -> viewModel.onGoogleSignedIn(user, reg) },
+                            onSubmitAiFeedback = { topic, helpful, area, suggestion ->
+                                viewModel.submitAppFeedback("AI_AGRONOMIST", topic, helpful, area, suggestion)
+                            },
+                            onOpenCommunity = { viewModel.navigateTo(AppScreen.COMMUNITY_HUB) },
+                            onOpenAdminConsole = { viewModel.navigateTo(AppScreen.ADMIN_CONSOLE) }
                         )
                     }
 
@@ -651,6 +704,9 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                                     "POULTRY", "AUDIT" -> viewModel.navigateTo(AppScreen.AGRONOMY)
                                     else -> viewModel.navigateTo(AppScreen.CALCULATOR)
                                 }
+                            },
+                            onSubmitFeedback = { topic, helpful, area, suggestion ->
+                                viewModel.submitAppFeedback("AI_AGRONOMIST", topic, helpful, area, suggestion)
                             }
                         )
                     }
@@ -720,7 +776,50 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onDeleteCloudRecord = { viewModel.deleteCloudRecord(it) },
                             onSubmitExtensionReport = { t, s, e -> viewModel.submitExtensionReport(t, s, e) },
                             onReviewExtensionReport = { id, n, st -> viewModel.submitAdvisorReview(id, n, st) },
-                            onDeleteExtensionReport = { viewModel.deleteExtensionReport(it) }
+                            onDeleteExtensionReport = { viewModel.deleteExtensionReport(it) },
+                            selectedCounty = selectedCounty,
+                            isSuperAdmin = isSuperAdmin,
+                            onAuthWithRegistration = { user, reg -> viewModel.onGoogleSignedIn(user, reg) },
+                            onOpenCommunity = { viewModel.navigateTo(AppScreen.COMMUNITY_HUB) },
+                            onOpenAdminConsole = { viewModel.navigateTo(AppScreen.ADMIN_CONSOLE) }
+                        )
+                    }
+
+                    AppScreen.COMMUNITY_HUB -> {
+                        com.example.ui.screens.community.CommunityAndSupportScreen(
+                            currentUser = currentUser,
+                            isSuperAdmin = isSuperAdmin,
+                            selectedCounty = selectedCounty,
+                            communityMessages = communityMessages,
+                            directMessages = directMessages,
+                            feedbackList = appFeedbackList,
+                            onAuthCompleted = { user, reg -> viewModel.onGoogleSignedIn(user, reg) },
+                            onSendCommunityMessage = { topic, text -> viewModel.sendCommunityMessage(topic, text) },
+                            onTogglePinSolution = { id, pinned -> viewModel.toggleCommunitySolutionPin(id, pinned) },
+                            onDeleteCommunityMessage = { id -> viewModel.deleteCommunityMessage(id) },
+                            onSendDirectMessage = { text -> viewModel.sendDirectMessageToAdmin(text) },
+                            onSubmitFeedback = { source, topic, helpful, area, suggestion ->
+                                viewModel.submitAppFeedback(source, topic, helpful, area, suggestion)
+                            },
+                            onOpenAdminConsole = { viewModel.navigateTo(AppScreen.ADMIN_CONSOLE) }
+                        )
+                    }
+
+                    AppScreen.ADMIN_CONSOLE -> {
+                        com.example.ui.screens.admin.AdminConsoleScreen(
+                            isSuperAdmin = isSuperAdmin,
+                            farmerRegistry = farmerRegistry,
+                            notifications = adminNotifications,
+                            directThreads = directThreads,
+                            activeDirectFarmerId = activeDirectFarmerId,
+                            directMessages = directMessages,
+                            feedbackList = appFeedbackList,
+                            onSelectDirectFarmer = { farmerId -> viewModel.selectDirectThreadFarmer(farmerId) },
+                            onSendDirectReply = { farmerId, farmerName, county, locality, text ->
+                                viewModel.sendAdminDirectReply(farmerId, farmerName, county, locality, text)
+                            },
+                            onMarkNotificationRead = { notifId -> viewModel.markAdminNotificationRead(notifId) },
+                            onOpenCommunityChat = { viewModel.navigateTo(AppScreen.COMMUNITY_HUB) }
                         )
                     }
                 }

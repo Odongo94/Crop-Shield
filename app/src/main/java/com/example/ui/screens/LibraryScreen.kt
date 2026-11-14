@@ -79,6 +79,7 @@ fun LibraryScreen(
     onThreatClick: (CropThreat) -> Unit,
     onNavigateToDiagnose: () -> Unit,
     onOpenFeature: (String) -> Unit = {},
+    isSuperAdmin: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -267,15 +268,20 @@ fun LibraryScreen(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val toolShortcuts = listOf(
-                        "SMART_ALERTS" to "🔔 PHI & Alerts",
-                        "CROP_SEASONS" to "🌱 Crop Seasons",
-                        "ECONOMICS" to "💰 Budget & ROI",
-                        "LIVESTOCK" to "🐄 Dairy/Goat/Pig",
-                        "POST_HARVEST" to "🌾 Storage & PICS",
-                        "AI_AGRONOMIST" to "🎙️ Voice Ask AI",
-                        "CLOUD_SYNC" to "☁️ Cloud Sync"
-                    )
+                    val toolShortcuts = buildList {
+                        add("AGRONOMY_PACK" to "🎓 Agronomy Y1–Y3 Pack")
+                        add("COMMUNITY_HUB" to "💬 Community & Support")
+                        if (isSuperAdmin) {
+                            add("ADMIN_CONSOLE" to "🛡️ Admin Map & DB")
+                        }
+                        add("SMART_ALERTS" to "🔔 PHI & Alerts")
+                        add("CROP_SEASONS" to "🌱 Crop Seasons")
+                        add("ECONOMICS" to "💰 Budget & ROI")
+                        add("LIVESTOCK" to "🐄 Dairy/Goat/Pig")
+                        add("POST_HARVEST" to "🌾 Storage & PICS")
+                        add("AI_AGRONOMIST" to "🎙️ Voice Ask AI")
+                        add("CLOUD_SYNC" to "☁️ Cloud Sync")
+                    }
                     toolShortcuts.forEach { (route, label) ->
                         FilterChip(
                             selected = false,

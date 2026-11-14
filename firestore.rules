@@ -10,6 +10,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isSuperAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'odongovincento@gmail.com';
+    }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
     }
@@ -32,6 +38,121 @@ service cloud.firestore {
         && data.county is string && data.county.size() <= 80
         && data.preferredLanguage in ['EN', 'SW', 'LG', 'LUO']
         && data.role == 'farmer'
+        && data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidFarmerRegistry(data, farmerId) {
+      return data.keys().hasAll([
+          'uid', 'email', 'displayName', 'farmName', 'county', 'locality',
+          'latitude', 'longitude', 'primaryCrops', 'signInCount', 'lastActiveAt', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'farmName', 'county', 'locality',
+          'latitude', 'longitude', 'primaryCrops', 'signInCount', 'lastActiveAt', 'createdAt'
+        ])
+        && data.uid == farmerId
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100
+        && data.farmName is string && data.farmName.size() <= 100
+        && data.county is string && data.county.size() <= 80
+        && data.locality is string && data.locality.size() <= 120
+        && data.latitude is number && data.latitude >= -90 && data.latitude <= 90
+        && data.longitude is number && data.longitude >= -180 && data.longitude <= 180
+        && data.primaryCrops is string && data.primaryCrops.size() <= 150
+        && data.signInCount is int && data.signInCount >= 1 && data.signInCount <= 1000000
+        && data.lastActiveAt is timestamp && data.lastActiveAt <= request.time
+        && data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAdminNotification(data) {
+      return data.keys().hasAll([
+          'farmerId', 'farmerName', 'farmerEmail', 'county', 'locality',
+          'eventType', 'summary', 'isRead', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'farmerId', 'farmerName', 'farmerEmail', 'county', 'locality',
+          'eventType', 'summary', 'isRead', 'createdAt'
+        ])
+        && data.farmerId is string && data.farmerId.size() > 0 && data.farmerId.size() <= 128
+        && data.farmerName is string && data.farmerName.size() > 0 && data.farmerName.size() <= 100
+        && data.farmerEmail is string && data.farmerEmail.size() > 0 && data.farmerEmail.size() <= 150
+        && data.county is string && data.county.size() <= 80
+        && data.locality is string && data.locality.size() <= 120
+        && data.eventType in ['NEW_FARMER', 'SIGN_IN', 'DIRECT_MESSAGE', 'FEEDBACK']
+        && data.summary is string && data.summary.size() > 0 && data.summary.size() <= 600
+        && data.isRead is bool
+        && data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidCommunityMessage(data) {
+      return data.keys().hasAll([
+          'roomId', 'authorId', 'authorName', 'authorRole', 'county',
+          'topic', 'messageText', 'isSolutionPinned', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'roomId', 'authorId', 'authorName', 'authorRole', 'county',
+          'topic', 'messageText', 'isSolutionPinned', 'createdAt'
+        ])
+        && data.roomId == 'global_shamba_community'
+        && data.authorId is string && data.authorId.size() > 0 && data.authorId.size() <= 128
+        && data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 100
+        && data.authorRole in ['farmer', 'super_admin', 'ai_advisor']
+        && data.county is string && data.county.size() <= 80
+        && data.topic is string && data.topic.size() > 0 && data.topic.size() <= 60
+        && data.messageText is string && data.messageText.size() > 0 && data.messageText.size() <= 1500
+        && data.isSolutionPinned is bool
+        && data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidDirectThread(data, farmerId) {
+      return data.keys().hasAll([
+          'farmerId', 'farmerName', 'county', 'locality', 'lastMessagePreview',
+          'lastSenderRole', 'unreadByAdmin', 'unreadByFarmer', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'farmerId', 'farmerName', 'county', 'locality', 'lastMessagePreview',
+          'lastSenderRole', 'unreadByAdmin', 'unreadByFarmer', 'createdAt', 'updatedAt'
+        ])
+        && data.farmerId == farmerId
+        && data.farmerName is string && data.farmerName.size() > 0 && data.farmerName.size() <= 100
+        && data.county is string && data.county.size() <= 80
+        && data.locality is string && data.locality.size() <= 120
+        && data.lastMessagePreview is string && data.lastMessagePreview.size() <= 300
+        && data.lastSenderRole in ['farmer', 'super_admin']
+        && data.unreadByAdmin is bool
+        && data.unreadByFarmer is bool
+        && data.createdAt is timestamp && data.createdAt <= request.time
+        && data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDirectMessage(data, farmerId) {
+      return data.keys().hasAll(['farmerId', 'senderId', 'senderName', 'senderRole', 'text', 'createdAt'])
+        && data.keys().hasOnly(['farmerId', 'senderId', 'senderName', 'senderRole', 'text', 'createdAt'])
+        && data.farmerId == farmerId
+        && data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128
+        && data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 100
+        && data.senderRole in ['farmer', 'super_admin']
+        && data.text is string && data.text.size() > 0 && data.text.size() <= 1500
+        && data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasAll([
+          'userId', 'farmerName', 'county', 'featureSource', 'questionOrTopic',
+          'wasHelpful', 'improvementArea', 'improvementSuggestion', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'farmerName', 'county', 'featureSource', 'questionOrTopic',
+          'wasHelpful', 'improvementArea', 'improvementSuggestion', 'createdAt'
+        ])
+        && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128
+        && data.farmerName is string && data.farmerName.size() > 0 && data.farmerName.size() <= 100
+        && data.county is string && data.county.size() <= 80
+        && data.featureSource in ['AI_AGRONOMIST', 'PHOTO_SCANNER', 'DIAGNOSE', 'COMMUNITY_CHAT', 'DIRECT_ADMIN', 'GENERAL_APP']
+        && data.questionOrTopic is string && data.questionOrTopic.size() <= 250
+        && data.wasHelpful is bool
+        && data.improvementArea is string && data.improvementArea.size() <= 100
+        && data.improvementSuggestion is string && data.improvementSuggestion.size() <= 1200
         && data.createdAt is timestamp && data.createdAt <= request.time;
     }
 
@@ -73,7 +194,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if isValidId(userId) && isOwner(userId);
+      allow get: if isValidId(userId) && (isOwner(userId) || isSuperAdmin());
       allow list: if false;
       allow create: if isValidId(userId) && isOwner(userId) && isValidProfile(incoming(), userId);
       allow update: if isValidId(userId)
@@ -99,11 +220,119 @@ service cloud.firestore {
       }
     }
 
+    // Strictly isolated farmer PII & locality database: readable ONLY by the farmer themselves or verified Super Admin
+    match /farmer_registry/{farmerId} {
+      allow get: if isValidId(farmerId) && (isOwner(farmerId) || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(farmerId)
+        && isOwner(farmerId)
+        && isValidFarmerRegistry(incoming(), farmerId)
+        && incoming().email == request.auth.token.email
+        && incoming().signInCount == 1;
+      allow update: if isValidId(farmerId)
+        && isOwner(farmerId)
+        && isValidFarmerRegistry(incoming(), farmerId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'farmName', 'county', 'locality', 'latitude', 'longitude', 'primaryCrops', 'signInCount', 'lastActiveAt'
+        ]);
+      allow delete: if isValidId(farmerId) && (isOwner(farmerId) || isSuperAdmin());
+    }
+
+    // Super-admin activity alerts (only verified Super Admin can read/list/mark read)
+    match /admin_notifications/{notifId} {
+      allow get, list: if isSuperAdmin();
+      allow create: if isValidId(notifId)
+        && isSignedIn()
+        && isValidAdminNotification(incoming())
+        && incoming().farmerId == request.auth.uid
+        && incoming().farmerEmail == request.auth.token.email
+        && incoming().isRead == false;
+      allow update: if isValidId(notifId)
+        && isSuperAdmin()
+        && isValidAdminNotification(incoming())
+        && incoming().farmerId == existing().farmerId
+        && incoming().farmerEmail == existing().farmerEmail
+        && incoming().createdAt == existing().createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isValidId(notifId) && isSuperAdmin();
+    }
+
+    // Community problem-solving chat (no emails/PII stored; super_admin role verified server-side)
+    match /community_messages/{messageId} {
+      allow get: if isValidId(messageId) && isSignedIn() && existing().roomId == 'global_shamba_community';
+      allow list: if isSignedIn() && resource.data.roomId == 'global_shamba_community';
+      allow create: if isValidId(messageId)
+        && isSignedIn()
+        && isValidCommunityMessage(incoming())
+        && incoming().authorId == request.auth.uid
+        && (
+          (isSuperAdmin() && incoming().authorRole == 'super_admin')
+          || (!isSuperAdmin() && incoming().authorRole == 'farmer' && incoming().isSolutionPinned == false)
+          || (incoming().authorRole == 'ai_advisor' && incoming().authorName == 'Shamba AI Agronomist' && incoming().isSolutionPinned == false)
+        );
+      allow update: if isValidId(messageId)
+        && isSuperAdmin()
+        && isValidCommunityMessage(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isSolutionPinned']);
+      allow delete: if isValidId(messageId) && isSignedIn() && (existing().authorId == request.auth.uid || isSuperAdmin());
+    }
+
+    // Private 1-on-1 direct support chat between each farmer and the Super Admin
+    match /direct_threads/{farmerId} {
+      allow get: if isValidId(farmerId) && (isOwner(farmerId) || isSuperAdmin());
+      allow list: if isSuperAdmin() || (isSignedIn() && resource.data.farmerId == request.auth.uid);
+      allow create: if isValidId(farmerId)
+        && isOwner(farmerId)
+        && isValidDirectThread(incoming(), farmerId);
+      allow update: if isValidId(farmerId)
+        && isValidDirectThread(incoming(), farmerId)
+        && (isOwner(farmerId) || isSuperAdmin())
+        && incoming().farmerId == existing().farmerId
+        && incoming().createdAt == existing().createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'farmerName', 'county', 'locality', 'lastMessagePreview', 'lastSenderRole', 'unreadByAdmin', 'unreadByFarmer', 'updatedAt'
+        ]);
+      allow delete: if isValidId(farmerId) && isSuperAdmin();
+
+      match /messages/{messageId} {
+        allow get: if isValidId(farmerId) && isValidId(messageId) && (isOwner(farmerId) || isSuperAdmin());
+        allow list: if isValidId(farmerId) && (isOwner(farmerId) || isSuperAdmin());
+        allow create: if isValidId(farmerId)
+          && isValidId(messageId)
+          && isSignedIn()
+          && (isOwner(farmerId) || isSuperAdmin())
+          && isValidDirectMessage(incoming(), farmerId)
+          && incoming().senderId == request.auth.uid
+          && (
+            (isSuperAdmin() && incoming().senderRole == 'super_admin')
+            || (!isSuperAdmin() && incoming().senderRole == 'farmer')
+          );
+        allow update: if false;
+        allow delete: if isValidId(farmerId) && isValidId(messageId) && (isOwner(farmerId) || isSuperAdmin());
+      }
+    }
+
+    // App feedback & improvement suggestions
+    match /app_feedback/{feedbackId} {
+      allow get: if isValidId(feedbackId) && isSignedIn() && (existing().userId == request.auth.uid || isSuperAdmin());
+      allow list: if isSuperAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(feedbackId)
+        && isSignedIn()
+        && isValidFeedback(incoming())
+        && incoming().userId == request.auth.uid;
+      allow update, delete: if isValidId(feedbackId) && isSuperAdmin();
+    }
+
     match /extension_reports/{reportId} {
       allow get: if isValidId(reportId) && isSignedIn()
-        && (existing().farmerId == request.auth.uid || isVerifiedAdvisorFor(existing()));
+        && (existing().farmerId == request.auth.uid || isVerifiedAdvisorFor(existing()) || isSuperAdmin());
       allow list: if isSignedIn()
-        && (resource.data.farmerId == request.auth.uid || isVerifiedAdvisorFor(resource.data));
+        && (resource.data.farmerId == request.auth.uid || isVerifiedAdvisorFor(resource.data) || isSuperAdmin());
       allow create: if isValidId(reportId)
         && isSignedIn()
         && isValidExtensionReport(incoming())
@@ -118,10 +347,10 @@ service cloud.firestore {
           (existing().farmerId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['farmerName', 'county', 'title', 'summary', 'advisorEmail', 'status', 'updatedAt']))
           ||
-          (isVerifiedAdvisorFor(existing())
+          ((isVerifiedAdvisorFor(existing()) || isSuperAdmin())
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['advisorNotes', 'status', 'updatedAt']))
         );
-      allow delete: if isValidId(reportId) && isSignedIn() && existing().farmerId == request.auth.uid;
+      allow delete: if isValidId(reportId) && isSignedIn() && (existing().farmerId == request.auth.uid || isSuperAdmin());
     }
 
     match /{document=**} {

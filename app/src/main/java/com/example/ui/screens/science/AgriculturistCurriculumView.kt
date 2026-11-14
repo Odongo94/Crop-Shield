@@ -74,8 +74,9 @@ import com.example.model.science.CurriculumTopic
 
 enum class CurriculumMainSection(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     CURRICULUM_AREAS("6 Core Areas", Icons.Default.School),
-    LIBRARY_OF_BOOKS("Library of Books", Icons.AutoMirrored.Filled.MenuBook),
-    PRACTICE_QUIZ("Practice Quiz", Icons.Default.Quiz)
+    DEGREE_PACK_Y1_Y3("Y1–Y3 Pack", Icons.AutoMirrored.Filled.MenuBook),
+    LIBRARY_OF_BOOKS("Books", Icons.Default.MenuBook),
+    PRACTICE_QUIZ("Quiz", Icons.Default.Quiz)
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -92,7 +93,7 @@ fun AgriculturistCurriculumView(
             .fillMaxSize()
             .testTag("agriculturist_curriculum_view")
     ) {
-        // Main Mode Navigation Tabs (6 Core Areas / Library of Books / Practice Quiz)
+        // Main Mode Navigation Tabs
         PrimaryTabRow(
             selectedTabIndex = activeSection.ordinal,
             containerColor = MaterialTheme.colorScheme.surface,
@@ -108,12 +109,14 @@ fun AgriculturistCurriculumView(
                         Text(
                             text = section.title,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 13.sp
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
                     },
                     icon = {
                         Icon(section.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
+                    },
+                    modifier = Modifier.testTag("curriculum_tab_${section.name.lowercase()}")
                 )
             }
         }
@@ -126,6 +129,9 @@ fun AgriculturistCurriculumView(
                     onSelectPillar = { selectedPillar = it },
                     onSearchQueryChange = { searchQuery = it }
                 )
+            }
+            CurriculumMainSection.DEGREE_PACK_Y1_Y3 -> {
+                AgronomyDegreePackView(modifier = Modifier.fillMaxSize())
             }
             CurriculumMainSection.LIBRARY_OF_BOOKS -> {
                 AgriBooksLibraryView(initialPillarFilter = selectedPillar)

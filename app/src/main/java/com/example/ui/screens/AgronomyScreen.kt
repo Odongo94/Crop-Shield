@@ -215,6 +215,11 @@ fun AgronomyScreen(
     onSubmitExtensionReport: (String, String, String) -> Unit = { _, _, _ -> },
     onReviewExtensionReport: (String, String, String) -> Unit = { _, _, _ -> },
     onDeleteExtensionReport: (String) -> Unit = {},
+    isSuperAdmin: Boolean = false,
+    onGoogleAuthCompleted: (FirebaseUser, com.example.ui.components.FarmerRegistrationInput) -> Unit = { u, _ -> onGoogleSignedIn(u) },
+    onSubmitAiFeedback: (topic: String, wasHelpful: Boolean, area: String, suggestion: String) -> Unit = { _, _, _, _ -> },
+    onOpenCommunity: () -> Unit = {},
+    onOpenAdminConsole: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var activeTab by remember { mutableStateOf(AgronomySubTab.WEED_SOIL) }
@@ -261,7 +266,8 @@ fun AgronomyScreen(
             AgronomySubTab.AI_ADVISORY -> {
                 com.example.ui.screens.ai.AiAgronomistScreen(
                     appLanguage = appLanguage,
-                    onLanguageSelected = onLanguageSelected
+                    onLanguageSelected = onLanguageSelected,
+                    onSubmitFeedback = onSubmitAiFeedback
                 )
             }
 
@@ -322,7 +328,12 @@ fun AgronomyScreen(
                     onDeleteCloudRecord = onDeleteCloudRecord,
                     onSubmitExtensionReport = onSubmitExtensionReport,
                     onReviewExtensionReport = onReviewExtensionReport,
-                    onDeleteExtensionReport = onDeleteExtensionReport
+                    onDeleteExtensionReport = onDeleteExtensionReport,
+                    selectedCounty = selectedCounty,
+                    isSuperAdmin = isSuperAdmin,
+                    onAuthWithRegistration = onGoogleAuthCompleted,
+                    onOpenCommunity = onOpenCommunity,
+                    onOpenAdminConsole = onOpenAdminConsole
                 )
             }
 
