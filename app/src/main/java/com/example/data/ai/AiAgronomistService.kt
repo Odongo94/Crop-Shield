@@ -2,46 +2,59 @@ package com.example.data.ai
 
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.BuildConfig
 import com.example.data.AgronomyCatalog
 import com.example.data.ThreatCatalog
-import com.example.data.compliance.AgriculturalAuditCatalog
-import com.example.data.poultry.PoultryManagementCatalog
 import com.example.data.quarantine.QuarantinePestCatalog
 import com.example.data.scanner.PhotoDiseaseScanner
-import com.example.data.science.WeedSoilScienceCatalog
-import com.example.data.soil.CecRebalanceCalculator
-import com.example.data.soil.IrrigationWaterCatalog
-import com.example.data.soil.OrganicManureCatalog
-import com.example.data.soil.SoilClassificationCatalog
-import com.example.model.DeveloperInfo
-import com.example.model.ThreatType
+import com.example.data.science.curriculum.AgronomyDegreePackCatalog
 import com.example.model.ai.AiChatMessage
 import com.example.model.ai.AiQuickPrompt
+import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.Content
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.withTimeout
 
 /**
  * Intelligent AI Agronomist Engine for Farmers.
- * Combines online Google Gemini 2.5 Flash API with an extensive
- * offline expert agricultural knowledge fallback.
+ * Routes online queries and multimodal crop/pest photos through Firebase AI Logic
+ * (`Firebase.ai`, model `gemini-3.8-flash` + App Check) with a deep catalog-backed
+ * offline agronomic knowledge fallback.
  */
 object AiAgronomistService {
 
     private const val TAG = "AiAgronomistService"
+    private const val GEMINI_MODEL_NAME = "gemini-3.8-flash"
+    private const val AI_TIMEOUT_MS = 60_000L
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private const val AGRONOMIST_SYSTEM_PROMPT =
+        "You are 'CropShield AI Agronomist', an expert tropical, East African, and international Senior Agronomist, Plant Pathologist, Entomologist, Soil Scientist, and Livestock Advisor. " +
+            "You serve smallholder and commercial farmers, extension officers, and field scouts. " +
+            "Always provide clear, authoritative, practical, and mathematically precise advice. " +
+            "When an agricultural photo is attached, inspect it carefully: distinguish strictly between insect pests/feeding damage and fungal/bacterial/viral plant diseases or nutrient deficiencies, state confidence and visual cues, and never confuse a pest for a disease. " +
+            "When answering pest or disease questions: (1) identify organism and symptoms, (2) give cultural & organic IPM controls, (3) give biological controls (CABI BioProtection / Bt / Neem / parasitoids), (4) give PCPB-registered products with exact knapsack rates per 16L/20L tank and Pre-Harvest Interval (PHI). " +
+            "When answering soil, fertilizer, or irrigation questions: provide exact NPK/lime rates (kg/ha, bags/acre) or FAO-56 ETc calculations. " +
+            "When answering poultry or livestock questions: provide exact vaccination timelines, chlorination neutralization (2.5 g/L skimmed milk), and feeding rates. " +
+            "Keep tone encouraging, well-structured with markdown headings and bullet points. Sign off technically under Lead Agronomist Odongo Vincent (CropShield IPM)."
+
+    private val agronomistModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = GEMINI_MODEL_NAME,
+            generationConfig = generationConfig {
+                temperature = 0.3f
+                maxOutputTokens = 2048
+            },
+            systemInstruction = content {
+                text(AGRONOMIST_SYSTEM_PROMPT)
+            }
+        )
+    }
 
     val quickPrompts: List<AiQuickPrompt> = listOf(
         AiQuickPrompt(
@@ -111,7 +124,8 @@ object AiAgronomistService {
 
     /**
      * Ask a question (optionally with an uploaded crop/pest/soil/livestock photo) to the AI Agronomist.
-     * Uses Gemini 2.5 Flash multimodal vision online when available; falls back seamlessly offline.
+     * Uses Firebase AI Logic (`gemini-3.8-flash`) online; falls back seamlessly to the rich
+     * CropShield catalog engine if offline or if AI Logic encounters a transient/timeout error.
      */
     suspend fun askAgricultureAi(
         userQuestion: String,
@@ -120,58 +134,125 @@ object AiAgronomistService {
     ): AiChatMessage = withContext(Dispatchers.IO) {
         val effectiveQuestion = userQuestion.trim().ifBlank {
             if (imageBitmap != null) {
-                "Analyze this uploaded agricultural photo carefully. Identify any crop pest, plant disease, nutrient deficiency, weed species, soil condition, or livestock issue visible, estimate severity, and provide organic/biocontrol and PCPB-registered agrochemical knapsack recommendations with Pre-Harvest Intervals."
+                "Analyze this uploaded agricultural photo carefully. Distinguish whether it shows an insect pest, plant disease, nutrient deficiency, weed species, soil condition, or livestock issue; estimate severity; and provide organic/biocontrol and PCPB-registered knapsack recommendations with Pre-Harvest Intervals."
             } else {
                 ""
             }
         }
 
-        val apiKey = try {
-            BuildConfig.GEMINI_API_KEY.trim()
-        } catch (_: Throwable) {
-            ""
+        if (effectiveQuestion.isBlank() && imageBitmap == null) {
+            return@withContext AiChatMessage(
+                text = "Please type your farming question or attach a crop photo so Shamba AI can help.",
+                isUser = false,
+                isOnlineGemini = false,
+                topicCategory = "Input Required"
+            )
         }
-        val hasValidKey = apiKey.isNotBlank() &&
-            !apiKey.equals("MY_GEMINI_API_KEY", ignoreCase = true) &&
-            !apiKey.contains("placeholder", ignoreCase = true)
 
-        if (hasValidKey) {
-            try {
-                val geminiResponse = callGeminiAgronomistApi(
-                    question = effectiveQuestion,
-                    history = conversationHistory,
-                    apiKey = apiKey,
-                    imageBitmap = imageBitmap
+        var onlineFailureNote: String? = null
+        try {
+            // Ensure FirebaseApp exists before touching Firebase.ai (guards pure JVM unit tests)
+            FirebaseApp.getInstance()
+            val geminiResponse = callFirebaseAiAgronomist(
+                question = effectiveQuestion,
+                history = conversationHistory,
+                imageBitmap = imageBitmap
+            )
+            if (!geminiResponse.isNullOrBlank()) {
+                return@withContext AiChatMessage(
+                    text = geminiResponse.trim(),
+                    isUser = false,
+                    isOnlineGemini = true,
+                    topicCategory = if (imageBitmap != null) "Photo Vision Diagnosis" else detectTopicCategory(effectiveQuestion),
+                    suggestedFollowUps = generateFollowUps("$effectiveQuestion $geminiResponse"),
+                    relatedCalculatorScreen = detectRelatedCalculator("$effectiveQuestion $geminiResponse")
                 )
-                if (geminiResponse != null && geminiResponse.isNotBlank()) {
-                    return@withContext AiChatMessage(
-                        text = geminiResponse,
-                        isUser = false,
-                        isOnlineGemini = true,
-                        topicCategory = if (imageBitmap != null) "Photo Vision Diagnosis" else detectTopicCategory(effectiveQuestion),
-                        suggestedFollowUps = generateFollowUps("$effectiveQuestion $geminiResponse"),
-                        relatedCalculatorScreen = detectRelatedCalculator("$effectiveQuestion $geminiResponse")
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Online Gemini API call failed, switching to offline agronomic engine: ${e.message}")
             }
+            onlineFailureNote = "Gemini returned an empty response; displaying verified CropShield catalog advisory."
+        } catch (e: TimeoutCancellationException) {
+            safeLogE(TAG, "Firebase AI agronomist request timed out after ${AI_TIMEOUT_MS}ms", e)
+            onlineFailureNote = "Online Gemini timed out after 60s; showing verified CropShield catalog advisory."
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            safeLogE(TAG, "Firebase AI agronomist call failed: ${e.message}", e)
+            onlineFailureNote = "Offline / fallback advisory active (${e.localizedMessage ?: "network unavailable"})."
         }
 
-        // Offline Fallback (with real optical pattern analysis when a photo is attached)
+        // Resilient Catalog-Grounded Offline Fallback
         val offlineResponse = if (imageBitmap != null) {
             generateOfflineImageAnalysisResponse(effectiveQuestion, imageBitmap)
         } else {
             generateOfflineAgronomicResponse(effectiveQuestion)
         }
+        val responseWithNotice = if (!onlineFailureNote.isNullOrBlank() && imageBitmap == null) {
+            "$offlineResponse\n\n_Status: ${onlineFailureNote}_"
+        } else {
+            offlineResponse
+        }
+
         AiChatMessage(
-            text = offlineResponse,
+            text = responseWithNotice,
             isUser = false,
             isOnlineGemini = false,
             topicCategory = if (imageBitmap != null) "Offline Photo Diagnosis" else detectTopicCategory(effectiveQuestion),
             suggestedFollowUps = generateFollowUps("$effectiveQuestion $offlineResponse"),
             relatedCalculatorScreen = detectRelatedCalculator("$effectiveQuestion $offlineResponse")
         )
+    }
+
+    private suspend fun callFirebaseAiAgronomist(
+        question: String,
+        history: List<AiChatMessage>,
+        imageBitmap: Bitmap?
+    ): String? {
+        val cleanHistory = mutableListOf<Content>()
+        var expectedRole = "user"
+        for (msg in history.takeLast(8)) {
+            val role = if (msg.isUser) "user" else "model"
+            val textBody = (if (msg.attachedImage != null) "[Attached Photo] " else "") + msg.text.trim()
+            if (textBody.isBlank()) continue
+            if (role == expectedRole) {
+                cleanHistory += content(role) { text(textBody.take(2000)) }
+                expectedRole = if (expectedRole == "user") "model" else "user"
+            }
+        }
+        if (cleanHistory.lastOrNull()?.role == "user") {
+            cleanHistory.removeAt(cleanHistory.lastIndex)
+        }
+
+        val scaledBitmap = imageBitmap?.let { scaleBitmapForInference(it, 1024) }
+        val userContent = content("user") {
+            if (scaledBitmap != null) {
+                image(scaledBitmap)
+            }
+            text(question)
+        }
+
+        val response = withTimeout(AI_TIMEOUT_MS) {
+            if (cleanHistory.isNotEmpty()) {
+                val chat = agronomistModel.startChat(history = cleanHistory)
+                chat.sendMessage(userContent)
+            } else {
+                agronomistModel.generateContent(userContent)
+            }
+        }
+        return response.text
+    }
+
+    private fun scaleBitmapForInference(bitmap: Bitmap, maxDimension: Int): Bitmap {
+        if (bitmap.width <= maxDimension && bitmap.height <= maxDimension) return bitmap
+        val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+        val newWidth: Int
+        val newHeight: Int
+        if (ratio > 1f) {
+            newWidth = maxDimension
+            newHeight = (maxDimension / ratio).toInt().coerceAtLeast(1)
+        } else {
+            newHeight = maxDimension
+            newWidth = (maxDimension * ratio).toInt().coerceAtLeast(1)
+        }
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 
     private suspend fun generateOfflineImageAnalysisResponse(
@@ -244,113 +325,17 @@ object AiAgronomistService {
         }
     }
 
-    private fun callGeminiAgronomistApi(
-        question: String,
-        history: List<AiChatMessage>,
-        apiKey: String,
-        imageBitmap: Bitmap? = null
-    ): String? {
-        val systemPrompt = buildString {
-            append("You are 'CropShield AI Agronomist', an expert tropical, East African, and international Senior Agronomist, Plant Pathologist, Entomologist, Soil Scientist, and Livestock Advisor. ")
-            append("You serve smallholder and commercial farmers, extension officers, and field scouts. ")
-            append("Always provide clear, authoritative, practical, and mathematically precise advice. ")
-            if (imageBitmap != null) {
-                append("An agricultural image/photo is attached. Examine the image closely: identify the crop, pest, insect stage, disease lesion, weed species, nutrient deficiency chlorosis/necrosis pattern, soil texture/crusting, or livestock sign; state confidence level and visual evidence before giving treatment. ")
-            }
-            append("When answering pest or disease questions: ")
-            append("1. Clearly identify the organism and characteristic damage symptoms. ")
-            append("2. Provide Cultural and Organic IPM controls (crop rotation, spacing, sanitation, push-pull, resistant varieties). ")
-            append("3. Provide Biological controls (CABI BioProtection registered products, parasitoids, entomopathogens like Metarhizium/Beauveria/Bt). ")
-            append("4. Provide PCPB Kenya registered agrochemicals with exact knapsack dilution rates (e.g. mL or grams per 16L or 20L backpack tank) and mandatory Pre-Harvest Intervals (PHI). ")
-            append("When answering soil, fertilizer, or irrigation questions: ")
-            append("Provide exact basal/topdressing fertilizer rates (kg/ha and 50kg bags), liming requirements based on pH and CEC, or FAO-56 irrigation depths (mm/day and liters/plant/day). ")
-            append("When answering poultry questions: ")
-            append("Detail specific age-based vaccination schedules, administration routes (eye drop, drinking water with 2.5 g/L skimmed milk, wing web), and CP%/energy feeding programs. ")
-            append("When answering pest, disease, or portal inquiries: ")
-            append("Draw directly from and cite the 11 authoritative international portals (AHR Australia, NPPC Bhutan, CABI PlantwisePlus Knowledge Bank, Bayer CropScience Agronomy ID, EPPO Global Quarantine A1/A2 Lists, Penn State Extension, Gardener's Supply Encyclopedia, Minnesota MDA Index, TAAT Africa Technologies, Corson Maize Pests & Diseases, and iNaturalist) as well as the NUFLIP / JICA Northern Uganda Vegetable Factsheet Guide (22 pests, 22 diseases, 8 physiological disorders like Blossom End Rot, Sunburn, Potassium/Magnesium deficiency, Flooding damage, and Watermelon pollination failure) with IRAC & FRAC MoA rotation and Bronopol plant activator. ")
-            append("Sign off advice technically under the authority of Crop Scientist Odongo Vincent (Lead Agronomist & Developer). Keep tone encouraging, professional, and formatted with clear markdown headers and bullet points.")
-        }
-
-        val contentsArray = JSONArray()
-
-        // Include recent history (up to last 4 messages for conversational context)
-        val recentHistory = history.takeLast(4)
-        recentHistory.forEach { msg ->
-            val role = if (msg.isUser) "user" else "model"
-            val textSummary = if (msg.attachedImage != null) "[Attached Photo] ${msg.text}" else msg.text
-            contentsArray.put(JSONObject().apply {
-                put("role", role)
-                put("parts", JSONArray().apply {
-                    put(JSONObject().apply { put("text", textSummary) })
-                })
-            })
-        }
-
-        // Current user message with system instruction context (+ optional inlineData image)
-        val currentParts = JSONArray().apply {
-            put(JSONObject().apply {
-                put("text", "System Instruction: $systemPrompt\n\nFarmer Question: $question")
-            })
-            if (imageBitmap != null) {
-                val base64Image = PhotoDiseaseScanner.bitmapToBase64(imageBitmap, 1024)
-                put(JSONObject().apply {
-                    put("inlineData", JSONObject().apply {
-                        put("mimeType", "image/jpeg")
-                        put("data", base64Image)
-                    })
-                })
-            }
-        }
-        contentsArray.put(JSONObject().apply {
-            put("role", "user")
-            put("parts", currentParts)
-        })
-
-        val jsonBody = JSONObject().apply {
-            put("contents", contentsArray)
-            put("generationConfig", JSONObject().apply {
-                put("temperature", 0.3)
-                put("maxOutputTokens", 2048)
-            })
-        }
-
-        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
-        val request = Request.Builder()
-            .url(requestUrl)
-            .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-
-        val response = okHttpClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val err = response.body?.string() ?: ""
-            Log.e(TAG, "Gemini chat error ${response.code}: $err")
-            return null
-        }
-
-        val responseBodyText = response.body?.string() ?: return null
-        val jsonResponse = JSONObject(responseBodyText)
-        val candidates = jsonResponse.optJSONArray("candidates") ?: return null
-        if (candidates.length() == 0) return null
-
-        val firstCandidate = candidates.getJSONObject(0)
-        val content = firstCandidate.optJSONObject("content") ?: return null
-        val parts = content.optJSONArray("parts") ?: return null
-        if (parts.length() == 0) return null
-
-        return parts.getJSONObject(0).optString("text", "")
-    }
-
     /**
      * Resilient Offline Agricultural Knowledge Engine.
-     * Evaluates intents, keywords, and domain catalogs to formulate
-     * comprehensive agronomic prescriptions even with zero network connectivity.
+     * Evaluates intents, keywords, and dynamically queries all CropShield catalogs
+     * (`ThreatCatalog`, `AgronomyCatalog`, `QuarantinePestCatalog`, `AgronomyDegreePackCatalog`)
+     * to formulate comprehensive, factual prescriptions even with zero network connectivity.
      */
     fun generateOfflineAgronomicResponse(query: String): String {
         val q = query.lowercase()
 
         // 1. FALL ARMYWORM
         if (q.contains("armyworm") || q.contains("faw") || (q.contains("maize") && q.contains("caterpillar"))) {
-            val faw = ThreatCatalog.getThreatById("fall_armyworm")
             return buildString {
                 append("### 🌽 Fall Armyworm (*Spodoptera frugiperda*) Management\n\n")
                 append("**1. Identification & Symptoms:**\n")
@@ -374,8 +359,6 @@ object AiAgronomistService {
 
         // 2. TOMATO LATE BLIGHT VS BACTERIAL WILT
         if (q.contains("late blight") || (q.contains("tomato") && (q.contains("blight") || q.contains("wilt")))) {
-            val blight = ThreatCatalog.getThreatById("late_blight")
-            val wilt = ThreatCatalog.getThreatById("bacterial_wilt")
             return buildString {
                 append("### 🍅 Tomato Late Blight vs. Bacterial Wilt Diagnosis\n\n")
                 append("**Key Diagnostic Differentiation:**\n")
@@ -421,100 +404,270 @@ object AiAgronomistService {
         }
 
         // 4. SOIL PH, LIMING, CEC
-        if (q.contains("soil") || q.contains("lime") || q.contains("cec") || q.contains("ph") || q.contains("acidity")) {
+        if (q.contains("lime") || q.contains("cec") || q.contains("ph ") || q.contains("soil ph") || q.contains("acidity")) {
             return buildString {
                 append("### 🧪 Soil Acidity Management, Liming & CEC Rebalancing\n\n")
-                append("**1. Diagnosis of Soil pH 4.8 (Strongly Acidic):**\n")
-                append("• Soil pH below 5.5 triggers **Aluminum (Al³⁺) and Manganese (Mn²⁺) toxicity**, which burns root tips and stunts root elongation.\n")
+                append("**1. Diagnosis of Strongly Acidic Soil (pH < 5.5):**\n")
+                append("• Soil pH below 5.5 triggers **Aluminum (Al³⁺) and Manganese (Mn²⁺) toxicity**, burning root tips and stunting root elongation.\n")
                 append("• Causes severe **Phosphorus fixation** into insoluble aluminum-phosphate complexes.\n")
-                append("• Induced deficiencies of Calcium (Ca²⁺), Magnesium (Mg²⁺), and Molybdenum (Mo).\n\n")
+                append("• Induces deficiencies of Calcium (Ca²⁺), Magnesium (Mg²⁺), and Molybdenum (Mo).\n\n")
                 append("**2. Agricultural Liming Prescription:**\n")
-                append("• To raise pH from 4.8 to target 6.2 on loamy clay soils, apply **1.5 to 2.5 metric tonnes of Agricultural Lime (CaCO₃) per Hectare (approx. 600 - 1,000 kg per Acre)**.\n")
+                append("• To raise pH from ~4.8 to target 6.2 on loamy clay soils, apply **1.5 to 2.5 metric tonnes of Agricultural Lime (CaCO₃) per Hectare (approx. 600 - 1,000 kg per Acre)**.\n")
                 append("• **Dolomitic Limestone (CaMg(CO₃)₂)** is required if soil test reveals Magnesium saturation < 10%.\n")
-                append("• Broadcast lime evenly across dry soil 4 - 6 weeks before planting and incorporate thoroughly into the top 15 - 20 cm.\n\n")
+                append("• Broadcast lime evenly across dry soil 4 - 6 weeks before planting and incorporate into the top 15 - 20 cm.\n\n")
                 append("**3. Albrecht Base Cation Saturation Ratio (BCSR) Targets:**\n")
-                append("• **Calcium Saturation**: 65% - 75%\n")
-                append("• **Magnesium Saturation**: 10% - 15%\n")
-                append("• **Potassium Saturation**: 3% - 5%\n")
-                append("• **Target Ca:Mg Ratio**: 5:1 to 7:1 (ratios < 3:1 cause soil crusting and dispersion).\n\n")
+                append("• **Calcium Saturation**: 65% - 75% • **Magnesium**: 10% - 15% • **Potassium**: 3% - 5%\n")
+                append("• **Target Ca:Mg Ratio**: 5:1 to 7:1.\n\n")
                 append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
             }
         }
 
         // 5. IRRIGATION & WATER REQUIREMENT
-        if (q.contains("irrigat") || q.contains("water") || q.contains("et0") || q.contains("drip") || q.contains("leaching")) {
+        if (q.contains("irrigat") || q.contains("et0") || q.contains("drip") || q.contains("leaching")) {
             return buildString {
                 append("### 💧 FAO-56 Irrigation Water Requirement & Salinity Management\n\n")
                 append("**1. Crop Evapotranspiration Formula:**\n")
-                append("ETc = ET0 × Kc\n")
-                append("• Where ET0 is reference evapotranspiration (typically 4.5 - 6.0 mm/day in tropical zones) and Kc is crop coefficient.\n")
-                append("• For Tomatoes/Capsicums at mid-season peak flowering, Kc = 1.15.\n")
-                append("• ETc = 5.0 mm/day × 1.15 = 5.75 mm/day (57.5 m³/ha/day).\n\n")
+                append("• `ETc = ET0 × Kc` (where ET0 is 4.5 - 6.0 mm/day in tropical zones).\n")
+                append("• For Tomatoes/Capsicums at mid-season peak flowering, `Kc = 1.15`.\n")
+                append("• Example at `ET0 = 5.0 mm/day`: `ETc = 5.75 mm/day` (57.5 m³/ha/day).\n\n")
                 append("**2. Water Application per Plant:**\n")
-                append("• At plant spacing of 60 cm × 50 cm (0.30 m² per plant), net water demand = 5.75 mm × 0.30 = **1.73 Liters/plant/day**.\n")
-                append("• Accounting for 90% drip system efficiency: **Gross Application = 1.95 - 2.1 Liters per plant per day**.\n\n")
+                append("• At 60 cm × 50 cm spacing (0.30 m²/plant), net demand = **1.73 L/plant/day**; with 90% drip efficiency = **1.95 - 2.1 L/plant/day**.\n\n")
                 append("**3. Salinity & Leaching Fraction (LF):**\n")
-                append("LF = ECw / (5 × ECe - ECw)\n")
-                append("• When irrigation water EC (ECw) exceeds 1.0 mS/cm, apply 10% - 15% extra water volume to leach salts below root zones and prevent tip burn.\n\n")
+                append("• `LF = ECw / (5 × ECe - ECw)`. When `ECw > 1.0 mS/cm`, apply 10% - 15% extra leaching water.\n\n")
                 append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
             }
         }
 
         // 6. COMPOST & MANURE
-        if (q.contains("compost") || q.contains("manure") || q.contains("organic") || q.contains("c:n")) {
+        if (q.contains("compost") || q.contains("manure") || q.contains("berkeley") || q.contains("c:n")) {
             return buildString {
                 append("### 🌿 Organic Manure Masterclass & 18-Day Berkeley Composting\n\n")
                 append("**1. The 18-Day Berkeley Hot Composting Method:**\n")
-                append("• Build pile with alternating layers of **Browns (Carbon)** and **Greens (Nitrogen)** to reach an initial C:N ratio of 25:1 to 30:1.\n")
-                append("• Pile dimensions: Minimum 1 meter × 1 meter × 1.5 meters high.\n")
-                append("• **Turning Schedule**: Let sit for 4 days $\\rightarrow$ Turn on Day 4 $\\rightarrow$ Turn every 2 days on Days 6, 8, 10, 12, 14.\n")
-                append("• Thermophilic core temperature reaches 55 - 65°C, pasteurizing all weed seeds and pathogens.\n\n")
-                append("**2. Raw Material Balancing (Browns vs Greens):**\n")
-                append("• **Browns (Carbon)**: Dry maize stalks (C:N 60:1), dry straw (80:1), sawdust (400:1), dry leaves (50:1).\n")
-                append("• **Greens (Nitrogen)**: Cattle manure (18:1), Poultry manure (10:1), Fresh grass clippings (18:1), Legume vines (15:1).\n\n")
-                append("**3. Field Application Tonnage:**\n")
-                append("• Commercial Vegetables (Tomatoes, Cabbages): **10 - 15 tonnes/ha (approx. 200 - 300 bags of 50kg/ha)** or 1 - 2 handfuls (200 - 400g) per planting hole thoroughly mixed with topsoil.\n\n")
+                append("• Layer **Browns (Carbon)** and **Greens (Nitrogen)** at an initial C:N ratio of 25:1 to 30:1 in a 1m × 1m × 1.5m pile.\n")
+                append("• Turn on Day 4, then every 2 days (Days 6, 8, 10, 12, 14, 16, 18) maintaining core temperature at 55 - 65°C.\n\n")
+                append("**2. Field Application Tonnage:**\n")
+                append("• Commercial Vegetables: **10 - 15 tonnes/ha** or 200 - 400g well-cured manure per planting hole.\n\n")
                 append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
             }
         }
 
         // 7. SPRAY NOZZLE & CALIBRATION
-        if (q.contains("nozzle") || q.contains("spray time") || q.contains("pressure") || q.contains("discharge") || q.contains("knapsack")) {
+        if (q.contains("nozzle") || q.contains("spray time") || q.contains("discharge") || q.contains("orifice")) {
             return buildString {
-                append("### 🎯 Spray Nozzle Discharge, Pressure & Spray Time Calibration\n\n")
-                append("**1. Physical Nozzle Law:**\n")
-                append("$$q = q_0 \\times \\sqrt{\\frac{P}{3.0\\text{ bar}}}$$\n")
-                append("• Standard Yellow 02 nozzle delivers $0.80\\text{ L/min}$ at $3.0\\text{ bar}$.\n")
-                append("• At $2.0\\text{ bar}$, discharge = $0.80 \\times \\sqrt{2.0 / 3.0} = \\mathbf{0.653\\text{ L/min}}$ ($39.2\\text{ L/h}$).\n")
-                append("• At $4.0\\text{ bar}$, discharge = $0.80 \\times \\sqrt{4.0 / 3.0} = \\mathbf{0.924\\text{ L/min}}$ ($55.4\\text{ L/h}$).\n\n")
-                append("**2. Tank Emptying Times:**\n")
-                append("• 16L Knapsack at 3.0 bar: $16.0 / 0.80 = \\mathbf{20.0\\text{ minutes}}$ continuous spraying.\n")
-                append("• 20L Knapsack at 3.0 bar: $20.0 / 0.80 = \\mathbf{25.0\\text{ minutes}}$ continuous spraying.\n\n")
-                append("**3. Orifice Wear 10% Rule:**\n")
-                append("• Catch fluid in measuring cylinder for exactly 60 seconds at operating pressure.\n")
-                append("• If captured volume exceeds nominal flow by $> 10\\%$, the nozzle is worn out and must be replaced immediately to avert chemical overdosing and crop scorching.\n\n")
+                append("### 🎯 Spray Nozzle Discharge, Pressure & Calibration\n\n")
+                append("• **Pressure Law:** `q = q0 × sqrt(P / 3.0 bar)`. A Yellow 02 nozzle (`0.80 L/min` at 3.0 bar) delivers `0.653 L/min` at 2.0 bar and `0.924 L/min` at 4.0 bar.\n")
+                append("• **Tank Emptying Time:** 16L knapsack at 3.0 bar = **20 minutes**; 20L tank = **25 minutes**.\n")
+                append("• **Wear Rule:** Replace nozzle if 60-second output exceeds nominal flow by **> 10%**.\n\n")
                 append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
             }
         }
 
         // 8. AUDIT & COMPLIANCE
-        if (q.contains("audit") || q.contains("compliance") || q.contains("globalgap") || q.contains("ks 1758") || q.contains("phi") || q.contains("mrl")) {
+        if (q.contains("audit") || q.contains("compliance") || q.contains("globalgap") || q.contains("ks 1758") || q.contains("mrl")) {
             return buildString {
                 append("### 📋 GlobalG.A.P. IFA v6 & KS 1758 Agricultural Compliance Protocols\n\n")
-                append("**1. Pre-Harvest Intervals (PHI) & MRLs:**\n")
-                append("• All chemical applications must respect statutory PHIs before harvest sign-off.\n")
-                append("• Prominently display warning flags at field block entry with application date, chemical name, and earliest harvest clearance hour.\n\n")
-                append("**2. Empty Agrochemical Container Triple-Rinsing SOP:**\n")
-                append("1. Fill 1/4 of container with clean water.\n")
-                append("2. Shake vigorously for 30 seconds.\n")
-                append("3. Drain rinse water into spray tank for 30 seconds. Repeat 3 times.\n")
-                append("4. Puncture bottom to render unusable and lock in designated empty container store awaiting NEMA-licensed disposal.\n\n")
-                append("**3. Worker Health & Welfare:**\n")
-                append("• Complete certified PPE provided free of charge.\n")
-                append("• Annual blood Cholinesterase testing for organophosphate/carbamate handlers.\n")
-                append("• Clean field sanitation latrines and potable drinking water within 500m of all work stations.\n\n")
+                append("1. **PHI & MRLs:** Strictly log application date + statutory Pre-Harvest Interval before harvesting.\n")
+                append("2. **Triple-Rinsing:** Fill 1/4 empty bottle with clean water, shake 30s, empty into tank (repeat 3×), puncture and store locked.\n")
+                append("3. **Worker Safety:** Certified PPE, annual cholinesterase testing for OP/carbamate handlers, clean water within 500m.\n\n")
                 append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
             }
+        }
+
+        // 9. DYNAMIC QUARANTINE, THREAT, WEED, FERTILIZER & CURRICULUM CATALOG SEARCH
+        val tokens = q.split(Regex("[^a-z0-9]+"))
+            .filter { it.length >= 3 && it !in STOP_WORDS }
+            .distinct()
+
+        // 9a. Fertilizer Intent Check (run before ThreatCatalog so "Tomato fertilizer plan" returns nutrition rather than Tomato pests)
+        val asksAboutFertilizer = q.contains("fertiliz") || q.contains("topdress") || q.contains("basal") ||
+            q.contains("npk") || q.contains("dap") || q.contains("can ") || q.contains("urea") ||
+            q.contains("nutrient") || q.contains("bags per ha")
+        val matchedCropPlan = AgronomyCatalog.cropFertilizerPlans.firstOrNull { plan ->
+            val planLower = plan.cropName.lowercase()
+            q.contains(planLower) || (asksAboutFertilizer && tokens.any { tok -> tok.length >= 4 && planLower.contains(tok) })
+        }
+        val matchedFert = AgronomyCatalog.fertilizerProducts.firstOrNull { fert ->
+            val fertLower = fert.name.lowercase()
+            q.contains(fertLower) || (asksAboutFertilizer && tokens.any { tok -> tok.length >= 4 && fertLower.contains(tok) })
+        }
+        if (asksAboutFertilizer && (matchedCropPlan != null || matchedFert != null)) {
+            return buildString {
+                append("### 🌱 Crop Nutrition & Fertilizer Prescription\n\n")
+                matchedCropPlan?.let { plan ->
+                    append("**Crop Plan: ${plan.cropName}**\n")
+                    append("• **Target Nutrients:** ${plan.targetNPerHa} N - ${plan.targetPPerHa} P2O5 - ${plan.targetKPerHa} K2O kg/ha\n")
+                    append("• **Basal Planting:** ${plan.recommendedBasalBrand} @ ${plan.basalRateKgPerHa} kg/ha\n")
+                    append("• **Topdressing:** ${plan.recommendedTopdressBrand} @ ${plan.topdressRateKgPerHa} kg/ha\n")
+                    if (plan.splitSchedule.isNotEmpty()) {
+                        append("• **Split Schedule:** ${plan.splitSchedule.joinToString("; ")}\n")
+                    }
+                    append("• **Soil Acidity Note:** ${plan.acidityAlert}\n")
+                    plan.agronomicGuidance.take(3).forEach { tip ->
+                        append("• $tip\n")
+                    }
+                    append("\n")
+                }
+                matchedFert?.let { f ->
+                    append("**Product Profile: ${f.brand} ${f.name} (${f.npkRatio})**\n")
+                    append("• **Standard Rate:** ${f.standardRatePerHa}\n")
+                    append("• **Soil pH Effect:** ${f.soilAcidImpact}\n")
+                    append("• **Decision Rule:** ${f.decisionRule}\n\n")
+                }
+                append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+            }
+        }
+
+        // 9b. Quarantine Pests (e.g., False Codling Moth, Fruit Fly, Tuta quarantine)
+        val matchedQuarantine = QuarantinePestCatalog.quarantinePests.firstOrNull { qp ->
+            q.contains(qp.commonName.lowercase()) ||
+                q.contains(qp.scientificName.lowercase()) ||
+                (q.contains("fcm") && qp.id == "qp_fcm") ||
+                tokens.count { tok ->
+                    qp.commonName.lowercase().contains(tok) ||
+                        qp.reasonForQuarantineListing.lowercase().contains(tok)
+                } >= 2
+        }
+        if (matchedQuarantine != null) {
+            return buildString {
+                append("### 🚨 ${matchedQuarantine.commonName} (*${matchedQuarantine.scientificName}*)\n\n")
+                append("**Regulatory Status:** ${matchedQuarantine.regulatoryStatus.badgeLabel}\n")
+                append("**Reason:** ${matchedQuarantine.reasonForQuarantineListing}\n\n")
+                append("**Identification & Biology:** ${matchedQuarantine.biologyAndIdentification}\n\n")
+                if (matchedQuarantine.diagnosticDamageSymptoms.isNotEmpty()) {
+                    append("**Diagnostic Damage Symptoms:**\n")
+                    matchedQuarantine.diagnosticDamageSymptoms.forEach { append("• $it\n") }
+                    append("\n")
+                }
+                if (matchedQuarantine.preHarvestBiosecurityControls.isNotEmpty()) {
+                    append("**Pre-Harvest Biosecurity Controls:**\n")
+                    matchedQuarantine.preHarvestBiosecurityControls.take(4).forEach { append("• $it\n") }
+                    append("\n")
+                }
+                append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+            }
+        }
+
+        // 9b-2. Agronomy Degree Pack Exact/Syllabus Match (before ThreatCatalog so "plant" or "crop" in course titles doesn't trigger ThreatCatalog)
+        val asksAboutCurriculum = q.contains("syllabus") || q.contains("curriculum") ||
+            q.contains("degree") || q.contains("bachelor") || q.contains("year 1") ||
+            q.contains("year 2") || q.contains("year 3") || q.contains("course") || q.contains("module")
+        val exactCurriculumMatch = AgronomyDegreePackCatalog.allSubjects.firstOrNull { subj ->
+            q.contains(subj.subjectName.lowercase()) ||
+                q.contains(subj.courseCode.lowercase()) ||
+                (asksAboutCurriculum && tokens.count { tok ->
+                    subj.subjectName.lowercase().contains(tok) ||
+                        subj.executiveSummary.lowercase().contains(tok)
+                } >= 2)
+        }
+        if (exactCurriculumMatch != null) {
+            return formatDegreeSubjectResponse(exactCurriculumMatch)
+        }
+
+        // 9c. CropShield ThreatCatalog (Pests, Diseases, Weeds, Soils)
+        val scoredThreats = ThreatCatalog.allThreats.map { threat ->
+            val nameLower = threat.name.lowercase()
+            val sciLower = threat.scientificName.lowercase()
+            val cropsLower = threat.targetCrops.joinToString(" ").lowercase()
+            val keysLower = threat.diagnosticKeys.joinToString(" ").lowercase()
+            var score = 0
+            if (q.contains(nameLower)) score += 20
+            if (q.contains(sciLower)) score += 20
+            tokens.forEach { tok ->
+                if (nameLower.contains(tok)) score += 6
+                if (cropsLower.contains(tok)) score += 3
+                if (keysLower.contains(tok) || threat.summary.lowercase().contains(tok)) score += 2
+            }
+            if (q.contains("pest") || q.contains("insect") || q.contains("bug") || q.contains("worm") || q.contains("mite")) {
+                if (threat.type.name == "PEST") score += 2
+            }
+            if (q.contains("disease") || q.contains("spot") || q.contains("rot") || q.contains("rust") || q.contains("mildew")) {
+                if (threat.type.name == "DISEASE") score += 2
+            }
+            threat to score
+        }.filter { it.second >= 5 }.sortedByDescending { it.second }
+
+        if (scoredThreats.isNotEmpty()) {
+            val topThreats = scoredThreats.take(2).map { it.first }
+            return buildString {
+                val primary = topThreats.first()
+                append("### 🌾 ${primary.name} (*${primary.scientificName}*) — ${primary.type.label}\n\n")
+                append("**Summary:** ${primary.summary}\n")
+                append("**Target Crops:** ${primary.targetCrops.joinToString(", ")}\n\n")
+                append("**Key Diagnostic Signs:**\n")
+                primary.diagnosticKeys.take(4).forEach { append("• $it\n") }
+                append("\n**Cultural & Organic IPM Controls:**\n")
+                primary.ipmPlan.culturalControls.take(3).forEach { append("• $it\n") }
+                primary.cabiBioProtections.firstOrNull()?.let { bio ->
+                    append("• **Biological Control (CABI):** ${bio.tradeName} (*${bio.activeAgent}*) — ${bio.modeOfAction}\n")
+                }
+                if (primary.pcpbChemicals.isNotEmpty() || primary.ipmPlan.chemicalControls.isNotEmpty()) {
+                    append("\n**PCPB Registered Chemicals & Knapsack Rates:**\n")
+                    primary.pcpbChemicals.take(3).forEach { chem ->
+                        append("• **${chem.tradeName}** (${chem.activeIngredient}) — ${chem.knapsackDosage} (PHI: ${chem.phiDays} days)\n")
+                    }
+                    if (primary.pcpbChemicals.isEmpty()) {
+                        primary.ipmPlan.chemicalControls.take(3).forEach { chem ->
+                            append("• **${chem.tradeName.ifBlank { chem.activeIngredient }}** (${chem.activeIngredient}) @ ${chem.dosagePerKnapsack}, PHI ${chem.phiDays} days\n")
+                        }
+                    }
+                }
+                if (topThreats.size > 1) {
+                    val alt = topThreats[1]
+                    append("\n**Also Consider (${alt.type.label}):** *${alt.name}* (${alt.scientificName}) — ${alt.diagnosticKeys.firstOrNull() ?: alt.summary}")
+                }
+                append("\n\n*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+            }
+        }
+
+        // 9d. Weed Catalog
+        val matchedWeed = AgronomyCatalog.kenyanWeeds.firstOrNull { weed ->
+            q.contains(weed.commonName.lowercase()) ||
+                q.contains(weed.botanicalName.lowercase()) ||
+                weed.localKenyanNames.any { q.contains(it.lowercase()) }
+        }
+        if (matchedWeed != null) {
+            return buildString {
+                append("### 🌿 Weed Management: ${matchedWeed.commonName} (*${matchedWeed.botanicalName}*)\n\n")
+                append("• **Classification:** ${matchedWeed.type.displayName} • **Crops Attacked:** ${matchedWeed.cropsAttacked.joinToString(", ")}\n")
+                append("• **Agronomic Impact:** ${matchedWeed.competitiveImpact}\n")
+                append("• **Cultural & Mechanical Control:** ${matchedWeed.culturalManagement.take(3).joinToString("; ")}\n")
+                if (matchedWeed.registeredHerbicides.isNotEmpty()) {
+                    append("\n**Registered Herbicides:**\n")
+                    matchedWeed.registeredHerbicides.take(3).forEach { h ->
+                        append("• **${h.tradeName}** (${h.activeIngredient}) — ${h.dosagePerKnapsack} [${h.timing.displayName}]\n")
+                    }
+                }
+                append("\n*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+            }
+        }
+
+        // 9e. Secondary Fertilizer Catch-all
+        if (matchedCropPlan != null || matchedFert != null) {
+            return buildString {
+                append("### 🌱 Crop Nutrition & Fertilizer Prescription\n\n")
+                matchedCropPlan?.let { plan ->
+                    append("**Crop Plan: ${plan.cropName}**\n")
+                    append("• **Target Nutrients:** ${plan.targetNPerHa} N - ${plan.targetPPerHa} P2O5 - ${plan.targetKPerHa} K2O kg/ha\n")
+                    append("• **Basal Planting:** ${plan.recommendedBasalBrand} @ ${plan.basalRateKgPerHa} kg/ha\n")
+                    append("• **Topdressing:** ${plan.recommendedTopdressBrand} @ ${plan.topdressRateKgPerHa} kg/ha\n")
+                }
+                matchedFert?.let { f ->
+                    append("**Product Profile: ${f.brand} ${f.name} (${f.npkRatio})**\n")
+                    append("• **Standard Rate:** ${f.standardRatePerHa}\n")
+                }
+                append("\n*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+            }
+        }
+
+        // 9f. Agronomy Degree Pack Subjects fallback (token-only match)
+        val matchedSubject = AgronomyDegreePackCatalog.allSubjects.firstOrNull { subj ->
+            tokens.count { tok ->
+                subj.subjectName.lowercase().contains(tok) ||
+                    subj.executiveSummary.lowercase().contains(tok)
+            } >= 2
+        }
+        if (matchedSubject != null) {
+            return formatDegreeSubjectResponse(matchedSubject)
         }
 
         // DEFAULT AGRONOMIC INTELLIGENCE ANSWER
@@ -522,20 +675,48 @@ object AiAgronomistService {
             append("### 🌾 CropShield Agricultural Advisory\n\n")
             append("Regarding your inquiry: **\"$query\"**\n\n")
             append("**Agronomic Best Practice Principles:**\n")
-            append("1. **Diagnostic Soil & Crop Scouting**: Systematically inspect 20 representative plants across a W-pattern in the field. Assess leaf undersides, growing tips, and root health.\n")
-            append("2. **Integrated Pest Management (IPM)**: Employ cultural methods (crop rotation, certified seeds, clean weeding) before resorting to synthetic chemicals.\n")
-            append("3. **Balanced Plant Nutrition**: Apply fertilizers based on plant phenological stage—high phosphorus at planting for root development, balanced nitrogen during vegetative canopy, and potassium during flowering and fruit bulking.\n")
-            append("4. **Safe Chemical Stewardship**: Always read product labels for dosage per 16L/20L knapsack tank, respect Pre-Harvest Intervals (PHI), wear certified PPE, and spray during calm hours (early morning or dusk).\n\n")
-            append("💡 *Tip: For exact dosing, open the **Knapsack Calculator**, **Soil & CEC Calculator**, or **Nozzle Discharge** tabs from the menu.*\n\n")
+            append("1. **Diagnostic Soil & Crop Scouting**: Inspect 20 representative plants across a W-pattern in the field—check leaf undersides for insects/eggs/spores, growing whorls, and roots.\n")
+            append("2. **Integrated Pest Management (IPM)**: Distinguish between insect pest feeding damage (holes, frass, mines, sucking colonies) and fungal/bacterial diseases before choosing a spray.\n")
+            append("3. **Balanced Plant Nutrition**: Match basal phosphorus at planting, nitrogen topdressing during vegetative growth, and potassium/calcium during flowering & fruiting.\n")
+            append("4. **Safe Chemical Stewardship**: Follow exact knapsack rates (per 16L/20L tank), Pre-Harvest Intervals (PHI), and PPE rules.\n\n")
+            append("💡 *Tip: Mention the crop name + symptom (e.g. 'tomato whiteflies' or 'beans rust') or attach a photo for an instant specific prescription.*\n\n")
             append("*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+        }
+    }
+
+    private fun formatDegreeSubjectResponse(
+        subj: com.example.data.science.curriculum.AgronomyPackSubject
+    ): String = buildString {
+        append("### 🎓 ${subj.courseCode}: ${subj.subjectName} (${subj.volume.yearLabel})\n\n")
+        append("${subj.executiveSummary}\n\n")
+        append("**Core Principles:**\n")
+        subj.coreConcepts.take(4).forEach { append("• $it\n") }
+        if (subj.keyFormulasAndMetrics.isNotEmpty()) {
+            append("\n**Key Formulas & Metrics:**\n")
+            subj.keyFormulasAndMetrics.take(3).forEach { append("• $it\n") }
+        }
+        append("\n*Signed off by Lead Agronomist Odongo Vincent (CropShield IPM)*")
+    }
+
+    private val STOP_WORDS = setOf(
+        "the", "and", "for", "with", "that", "this", "from", "have", "has", "how", "what",
+        "why", "when", "where", "which", "can", "you", "your", "crop", "crops", "farm",
+        "farmer", "help", "please", "need", "about", "into", "are", "was", "were"
+    )
+
+    private fun safeLogE(tag: String, message: String, tr: Throwable? = null) {
+        try {
+            Log.e(tag, message, tr)
+        } catch (_: Throwable) {
+            // Ignored when running under plain JVM unit tests without Android Log
         }
     }
 
     private fun detectTopicCategory(query: String): String {
         val q = query.lowercase()
         return when {
-            q.contains("pest") || q.contains("insect") || q.contains("caterpillar") || q.contains("worm") || q.contains("mite") || q.contains("thrip") -> "Pest Management"
-            q.contains("disease") || q.contains("blight") || q.contains("fung") || q.contains("bacter") || q.contains("wilt") || q.contains("rust") -> "Crop Pathology"
+            q.contains("pest") || q.contains("insect") || q.contains("caterpillar") || q.contains("worm") || q.contains("mite") || q.contains("thrip") || q.contains("whitefl") || q.contains("aphid") -> "Pest Management"
+            q.contains("disease") || q.contains("blight") || q.contains("fung") || q.contains("bacter") || q.contains("wilt") || q.contains("rust") || q.contains("mildew") -> "Crop Pathology"
             q.contains("poultry") || q.contains("chick") || q.contains("layer") || q.contains("broiler") || q.contains("vaccin") -> "Poultry Health"
             q.contains("soil") || q.contains("lime") || q.contains("cec") || q.contains("ph") || q.contains("manure") || q.contains("compost") -> "Soil Science"
             q.contains("water") || q.contains("irrigat") || q.contains("drip") || q.contains("et0") -> "Irrigation Science"

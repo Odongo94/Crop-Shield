@@ -262,7 +262,7 @@ service cloud.firestore {
 
     // Community problem-solving chat (no emails/PII stored; super_admin role verified server-side)
     match /community_messages/{messageId} {
-      allow get: if isValidId(messageId) && isSignedIn() && existing().roomId == 'global_shamba_community';
+      allow get: if isValidId(messageId) && isSignedIn() && (resource == null || existing().roomId == 'global_shamba_community');
       allow list: if isSignedIn() && resource.data.roomId == 'global_shamba_community';
       allow create: if isValidId(messageId)
         && isSignedIn()

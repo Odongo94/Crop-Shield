@@ -86,6 +86,7 @@ import com.example.ui.screens.PhotoDiseaseScannerScreen
 import com.example.ui.screens.ScoutLogScreen
 import com.example.ui.screens.ScoutingSheetScreen
 import com.example.ui.screens.ThreatDetailScreen
+import com.example.data.firebase.configureAppCheck
 import com.example.ui.theme.CropShieldTheme
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.CropShieldViewModel
@@ -93,6 +94,7 @@ import com.example.viewmodel.CropShieldViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         setContent {
             val viewModel: CropShieldViewModel = viewModel()
@@ -786,6 +788,7 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                     }
 
                     AppScreen.COMMUNITY_HUB -> {
+                        val isCommunityAiResponding by viewModel.isCommunityAiResponding.collectAsStateWithLifecycle()
                         com.example.ui.screens.community.CommunityAndSupportScreen(
                             currentUser = currentUser,
                             isSuperAdmin = isSuperAdmin,
@@ -801,7 +804,10 @@ fun CropShieldApp(viewModel: CropShieldViewModel = viewModel()) {
                             onSubmitFeedback = { source, topic, helpful, area, suggestion ->
                                 viewModel.submitAppFeedback(source, topic, helpful, area, suggestion)
                             },
-                            onOpenAdminConsole = { viewModel.navigateTo(AppScreen.ADMIN_CONSOLE) }
+                            onOpenAdminConsole = { viewModel.navigateTo(AppScreen.ADMIN_CONSOLE) },
+                            onRequestAiReply = { msg -> viewModel.requestImmediateCommunityAiReply(msg) },
+                            isCommunityAiResponding = isCommunityAiResponding,
+                            statusMessage = cloudSyncMessage
                         )
                     }
 

@@ -250,9 +250,11 @@ fun AiAgronomistScreen(
                     imageBitmap = img
                 )
                 messages = messages + aiResponse
-            } catch (_: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 val fallbackResponse = AiChatMessage(
-                    text = "Unable to process request right now. Please try again or consult the offline agronomy guides.",
+                    text = "Unable to process request right now (${e.localizedMessage ?: "network or runtime error"}). Please try again or consult the offline agronomy guides.",
                     isUser = false,
                     isOnlineGemini = false
                 )

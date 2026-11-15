@@ -180,4 +180,43 @@ class CommunityAiModeratorTest {
         )
         assertNull(pureQuestion)
     }
+
+    @Test
+    fun `looksLikeFarmerQuestion recognizes symptom posts without question marks and handles fallback timestamps`() {
+        val nowMs = 1_700_000_600_000L
+
+        assertTrue(
+            CommunityAiModerator.looksLikeFarmerQuestion(
+                "My tomatoes have caterpillars boring holes into green fruits please help"
+            )
+        )
+        assertTrue(
+            CommunityAiModerator.looksLikeFarmerQuestion(
+                "Maize leaves yellowing with tiny sucking aphids on the whorl"
+            )
+        )
+        assertTrue(
+            !CommunityAiModerator.looksLikeFarmerQuestion("Thanks, that worked!")
+        )
+
+        // Pending message with null serverTimestamp uses fallbackTimestampsMs
+        val pendingMsg = CommunityMessage(
+            id = "q_pending",
+            authorId = "farmer_9",
+            authorName = "Amina",
+            authorRole = "farmer",
+            topic = "Crop Help",
+            messageText = "My cabbages have diamondback moth holes on the lower leaves",
+            createdAt = null
+        )
+
+        assertTrue(CommunityAiModerator.isQuestionUnanswered(pendingMsg, listOf(pendingMsg)))
+
+        val dueResult = CommunityAiModerator.evaluateUnansweredQuestions(
+            messages = listOf(pendingMsg),
+            nowMs = nowMs,
+            fallbackTimestampsMs = mapOf("q_pending" to (nowMs - 320_000L))
+        )
+        assertEquals(listOf("q_pending"), dueResult.readyQuestions.map { it.id })
+    }
 }

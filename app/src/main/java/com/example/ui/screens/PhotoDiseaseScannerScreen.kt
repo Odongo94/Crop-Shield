@@ -1010,6 +1010,41 @@ private fun ScanResultCard(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
+            if (!result.analysisNotice.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth().testTag("scanner_fallback_notice")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = result.analysisNotice,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+            }
+
+            if (result.detailedAnalysisText.isNotBlank()) {
+                Text(
+                    text = result.detailedAnalysisText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("scanner_detailed_summary")
+                )
+            }
+
             // Agronomic Crop Targets & Vulnerability Profile
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -1410,22 +1445,24 @@ private fun ScanResultCard(
 
             // Action Buttons
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Button 1: Open Full Threat Detail & Lifecycle
-                Button(
-                    onClick = onOpenThreatDetail,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("button_view_full_lifecycle"),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("View Full Guide & Lifecycle Stages", fontWeight = FontWeight.Bold)
+                // Button 1: Open Full Threat Detail & Lifecycle (only when matched to a catalog threat)
+                if (result.threat != null) {
+                    Button(
+                        onClick = onOpenThreatDetail,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("button_view_full_lifecycle"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("View Full Guide & Lifecycle Stages", fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 // Button 2: Knapsack mix calculation

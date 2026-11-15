@@ -1,26 +1,25 @@
 package com.example.data.scanner
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.util.Base64
 import android.util.Log
-import com.example.BuildConfig
 import com.example.data.ThreatCatalog
 import com.example.model.ChemicalRecommendation
 import com.example.model.CropThreat
 import com.example.model.ThreatType
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.Schema
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
+import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
-
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,7 +31,7 @@ data class ScanDiagnosisResult(
     val scientificName: String,
     val crop: String,
     val confidencePercent: Int,
-    val severity: String, // Mild, Moderate, Severe, Critical
+    val severity: String, // Mild, Moderate, Severe, Extreme
     val visualSymptomsDetected: List<String>,
     val recommendedCulturalAction: String,
     val recommendedChemicals: List<String>,
@@ -49,613 +48,810 @@ data class ScanDiagnosisResult(
     val yieldLossPotential: String = threat?.yieldLossPotential ?: "30% - 70% if unmanaged",
     val economicThresholdInfo: String = threat?.economicThresholdInfo ?: (threat?.ipmPlan?.economicThreshold ?: "Intervene upon first symptom detection"),
     val mechanicalControlAction: String = threat?.mechanicalControls?.firstOrNull() ?: (threat?.ipmPlan?.physicalMechanicalControls?.firstOrNull() ?: "Hand rogue or cultivate"),
-    val realTimeTimestamp: String = SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale.getDefault()).format(Date())
+    val realTimeTimestamp: String = SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale.getDefault()).format(Date()),
+    val analysisNotice: String? = null
 )
 
 object PhotoDiseaseScanner {
 
     private const val TAG = "PhotoDiseaseScanner"
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val scanResponseSchema by lazy {
+        Schema.obj(
+            properties = mapOf(
+                "threatId" to Schema.string(
+                    description = "Exact CropShield catalog threat ID if matching, or 'custom_pest', 'custom_disease', 'custom_weed', or 'custom_soil'."
+                ),
+                "threatType" to Schema.enumeration(
+                    values = listOf("PEST", "DISEASE", "WEED", "SOIL"),
+                    description = "Strict category: PEST for insects, caterpillars, mites, thrips, aphids, whiteflies, beetles, slugs, or insect feeding/chewing/mining damage; DISEASE for fungal, oomycete, bacterial, or viral pathogens; WEED for invasive/parasitic weeds; SOIL for soil profile/mineral deficiencies."
+                ),
+                "diseaseName" to Schema.string(description = "Common name of the identified pest, disease, weed, or soil condition."),
+                "scientificName" to Schema.string(description = "Scientific Latin name of the causal insect, pathogen, weed, or soil order."),
+                "crop" to Schema.string(description = "Host crop identified or 'General Field Crop'."),
+                "confidence" to Schema.integer(description = "Diagnostic confidence percentage between 55 and 99."),
+                "severity" to Schema.enumeration(
+                    values = listOf("Mild", "Moderate", "Severe", "Extreme"),
+                    description = "Observed infestation or infection severity."
+                ),
+                "symptoms" to Schema.array(
+                    items = Schema.string(),
+                    description = "3 to 5 specific visual symptoms observed directly in the photo."
+                ),
+                "culturalAction" to Schema.string(description = "Infonet-Biovision cultural or organic IPM practice."),
+                "mechanicalAction" to Schema.string(description = "Physical or mechanical intervention step."),
+                "recommendedChemicals" to Schema.array(
+                    items = Schema.string(),
+                    description = "Registered agrochemical active ingredients and dosages matching the identified category."
+                ),
+                "summary" to Schema.string(description = "Concise visual explanation justifying why this is classified as PEST vs DISEASE vs WEED vs SOIL."),
+                "cabiBiocontrol" to Schema.string(description = "CABI BioProtection biological control agent or biopesticide."),
+                "infonetPractice" to Schema.string(description = "Infonet-Biovision organic field practice."),
+                "pcpbChemical" to Schema.string(description = "PCPB registered control product with FRAC/IRAC code and PHI days.")
+            )
+        )
+    }
 
-    /**
-     * Converts a bitmap into a Base64 JPEG string (downscaling if necessary for efficiency).
-     */
-    fun bitmapToBase64(bitmap: Bitmap, maxDimension: Int = 1024): String {
-        val scaledBitmap = if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
+    private val scannerModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.8-flash",
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = scanResponseSchema
+                temperature = 0.2f
+            }
+        )
+    }
+
+    private fun safeLogE(message: String, throwable: Throwable? = null) {
+        try {
+            if (throwable != null) {
+                Log.e(TAG, message, throwable)
+            } else {
+                Log.e(TAG, message)
+            }
+        } catch (_: Throwable) {
+            // Ignored on plain JVM unit tests without Robolectric
+        }
+    }
+
+    fun scaleBitmapForInference(bitmap: Bitmap, maxDimension: Int = 1024): Bitmap {
+        return if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
             val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
             val newWidth: Int
             val newHeight: Int
-            if (ratio > 1) {
+            if (ratio > 1f) {
                 newWidth = maxDimension
-                newHeight = (maxDimension / ratio).toInt()
+                newHeight = (maxDimension / ratio).toInt().coerceAtLeast(1)
             } else {
                 newHeight = maxDimension
-                newWidth = (maxDimension * ratio).toInt()
+                newWidth = (maxDimension * ratio).toInt().coerceAtLeast(1)
             }
             Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
         } else {
             bitmap
         }
+    }
 
+    /**
+     * Converts a bitmap into a Base64 JPEG string (downscaling if necessary for efficiency).
+     */
+    fun bitmapToBase64(bitmap: Bitmap, maxDimension: Int = 1024): String {
+        val scaledBitmap = scaleBitmapForInference(bitmap, maxDimension)
         val outputStream = ByteArrayOutputStream()
         scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
         return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
     }
 
     /**
-     * Performs real-time multimodal scan analysis on a crop, pest, weed, or soil photograph.
-     * Tries Gemini Multimodal Vision API first if online;
-     * seamlessly falls back to offline optical symptom analysis on error/offline.
+     * Performs real-time multimodal scan analysis on a crop, pest, weed, or soil photograph
+     * via Firebase AI Logic (gemini-3.8-flash) with App Check attestation.
+     * Falls back transparently to the domain-aware offline optical symptom engine on network/service error.
      */
     suspend fun analyzeCropPhoto(
         bitmap: Bitmap,
         cropHint: String = "Auto-Detect",
         categoryFilter: ThreatType? = null
     ): ScanDiagnosisResult = withContext(Dispatchers.IO) {
-        val apiKey = try {
-            BuildConfig.GEMINI_API_KEY
-        } catch (e: Throwable) {
-            ""
-        }
-
-        val hasValidKey = apiKey.isNotBlank() && !apiKey.contains("MY_GEMINI_API_KEY")
-
-        if (hasValidKey) {
-            try {
-                val onlineResult = callGeminiVisionApi(bitmap, apiKey, cropHint, categoryFilter)
-                if (onlineResult != null) {
-                    return@withContext onlineResult
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Gemini vision API failed, falling back to offline diagnostic engine: ${e.message}")
+        var fallbackNotice: String? = null
+        try {
+            val onlineResult = withTimeout(60_000L) {
+                callFirebaseAiVision(bitmap, cropHint, categoryFilter)
             }
+            if (onlineResult != null) {
+                return@withContext onlineResult
+            }
+            fallbackNotice = "Gemini Vision returned an empty response; showing offline optical pre-screening."
+        } catch (e: TimeoutCancellationException) {
+            safeLogE("Gemini Vision analysis timed out after 60s", e)
+            fallbackNotice = "Gemini Vision timed out after 60s; showing offline optical pre-screening."
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            safeLogE("Gemini Vision AI failed, falling back to offline optical engine: ${e.message}", e)
+            fallbackNotice = "Online Vision AI unavailable (${e.localizedMessage ?: "network/App Check error"}); showing offline optical pre-screening."
         }
 
-        // Resilient Offline Agronomic & Soil Vision Engine fallback
-        analyzeOfflineOpticalPatterns(bitmap, cropHint, categoryFilter)
+        analyzeOfflineOpticalPatterns(
+            bitmap = bitmap,
+            cropHint = cropHint,
+            categoryFilter = categoryFilter,
+            analysisNotice = fallbackNotice
+        )
     }
 
-    private fun callGeminiVisionApi(
+    private suspend fun callFirebaseAiVision(
         bitmap: Bitmap,
-        apiKey: String,
         cropHint: String,
-        categoryFilter: ThreatType? = null
+        categoryFilter: ThreatType?
     ): ScanDiagnosisResult? {
-        val base64Image = bitmapToBase64(bitmap, 1024)
+        val scaledBitmap = scaleBitmapForInference(bitmap, 1024)
+        val prompt = buildVisionPrompt(cropHint, categoryFilter)
 
-        val prompt = buildString {
-            append("You are an expert plant pathologist, agricultural entomologist, weed scientist, and pedologist diagnosing East African crop threats and soil health. ")
-            append("The system integrates Infonet-Biovision (organic/cultural IPM), CABI BioProtection Portal (biological agents), and PCPB Kenya (official registered agrochemicals with precise dosages). ")
-            append("CRITICAL INSTRUCTION: You MUST carefully distinguish between INSECT PESTS (and their feeding damage: ragged holes, windowpaning, leaf miner blotch tunnels, caterpillar frass, fruit cavities, aphid/whitefly colonies, mite webbing, thrips silvering) and PLANT DISEASES (fungal, bacterial, oomycete, viral). ")
-            append("Do NOT misidentify insect pest damage as a disease! If you observe insect pests, larvae, nymphs, or characteristic insect chew/bore/mine damage, categorize it strictly as 'threatType': 'PEST'. ")
-            append("Examine this photo carefully. ")
-            if (cropHint != "Auto-Detect") {
-                append("The farmer states the crop/context is: $cropHint. ")
+        val response = scannerModel.generateContent(
+            content {
+                text(prompt)
+                image(scaledBitmap)
             }
-            if (categoryFilter != null) {
-                append("The farmer requested specific analysis in category: ${categoryFilter.label}. ")
-            }
-            append("Identify whether this photograph matches one of these known catalog threats (or identify pest, weed, soil profile, or disease accurately): ")
-            append("1. Fall Armyworm (Spodoptera frugiperda) [fall_armyworm] - INSECT PEST (Maize, Sorghum: ragged chewed whorl, sawdust frass, leaf holes)\n")
-            append("2. Tomato Leafminer (Tuta absoluta) [tuta_absoluta] - INSECT PEST (Tomato, Potato: translucent blotch mines, leaf necrosis, fruit holes)\n")
-            append("3. African Bollworm (Helicoverpa armigera) [african_bollworm] - INSECT PEST (Tomato, Legumes, Pepper: circular chewed fruit holes, bud drop)\n")
-            append("4. Two-Spotted Spider Mite (Tetranychus urticae) [spider_mites] - INSECT/ACARID PEST (Roses, Carnations, Beans, Tomatoes: fine silken webbing, chlorotic stippling, bronzing)\n")
-            append("5. Western Flower Thrips (Frankliniella occidentalis) [western_flower_thrips] - INSECT PEST (Roses, Flowers, French Beans: silvery bleached petal/leaf scarring, tar fecal specks, deformed buds)\n")
-            append("6. Cotton / Melon & Rose Aphids (Aphis gossypii, Macrosiphum rosae) [aphids] - INSECT PEST (Vegetables, Roses, Brassicas: dense clustering colonies, leaf curl, sticky honeydew)\n")
-            append("7. Maize Stem Borer (Busseola fusca) [maize_stem_borer] - INSECT PEST (Maize: shot holes, central deadheart, stem tunneling)\n")
-            append("8. Diamondback Moth (Plutella xylostella) [diamondback_moth] - INSECT PEST (Cabbage, Kale, Sukuma Wiki, Broccoli: windowpaning holes, skeletonization)\n")
-            append("9. Whiteflies & TYLCV (Bemisia tabaci) [whiteflies] - INSECT PEST (Tomato, Cassava: tiny white fluttering insects, yellow mosaic, upward leaf cupping)\n")
-            append("10. Legume Pod Borer (Maruca vitrata) [maruca_pod_borer] - INSECT PEST (French Beans, Cowpeas: webbed flowers, bored pods)\n")
-            append("11. Late Blight (Phytophthora infestans) [late_blight] - FUNGAL/OOMYCETE DISEASE (Tomato, Potato: water-soaked spreading lesions, white sporulation ring)\n")
-            append("12. Common Bean Rust (Uromyces appendiculatus) [bean_rust] - FUNGAL DISEASE (Beans: reddish-brown powdery pustules with yellow halos)\n")
-            append("13. Cereal Rusts (Puccinia sorghi) [cereal_rust] - FUNGAL DISEASE (Maize, Wheat: golden-brown to reddish-orange powdery pustules)\n")
-            append("14. Rose Powdery Mildew (Podosphaera pannosa) [rose_powdery_mildew] - FUNGAL DISEASE (Roses: white powdery coating on leaves and buds)\n")
-            append("15. Rose Downy Mildew (Peronospora sparsa) [rose_downy_mildew] - OOMYCETE DISEASE (Roses: angular purplish-red spots delimited by veins)\n")
-            append("16. Botrytis Blight / Grey Mold (Botrytis cinerea) [botrytis_blight] - FUNGAL DISEASE (Cut Flowers, Strawberries: velvety grey mold, ghost spots on petals)\n")
-            append("17. Bacterial Wilt (Ralstonia solanacearum) [bacterial_wilt] - BACTERIAL DISEASE (Potato, Tomato: rapid daytime wilting of green foliage, vascular browning)\n")
-            append("18. Witchweed (Striga hermonthica) [weed_striga] - INVASIVE WEED & LOW N/P SOIL INDICATOR\n")
-            append("19. Purple Nutsedge (Cyperus rotundus) [weed_purple_nutsedge] - INVASIVE WEED & COMPACTION INDICATOR\n")
-            append("20. Humic Nitisol (Red Volcanic Soil) [soil_humic_nitisol] - SOIL TYPE & HEALTH\n")
-            append("21. Pellic Vertisol (Black Cotton Cracking Clay) [soil_pellic_vertisol] - SOIL TYPE & HEALTH\n")
-            append("Output strictly valid JSON with these exact keys: ")
-            append("{ \"threatId\": \"...\", \"threatType\": \"PEST|DISEASE|WEED|SOIL\", \"diseaseName\": \"...\", \"scientificName\": \"...\", \"crop\": \"...\", \"confidence\": 94, \"severity\": \"Severe\", \"symptoms\": [\"...\", \"...\", \"...\"], \"culturalAction\": \"...\", \"mechanicalAction\": \"...\", \"recommendedChemicals\": [\"...\"], \"summary\": \"...\", \"cabiBiocontrol\": \"...\", \"infonetPractice\": \"...\", \"pcpbChemical\": \"...\" }")
-        }
-
-        val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("text", prompt)
-                        })
-                        put(JSONObject().apply {
-                            put("inlineData", JSONObject().apply {
-                                put("mimeType", "image/jpeg")
-                                put("data", base64Image)
-                            })
-                        })
-                    })
-                })
-            })
-            put("generationConfig", JSONObject().apply {
-                put("responseMimeType", "application/json")
-                put("temperature", 0.2)
-            })
-        }
-
-        val requestUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
-        val request = Request.Builder()
-            .url(requestUrl)
-            .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-
-        val response = okHttpClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val errBody = response.body?.string() ?: ""
-            Log.e(TAG, "Gemini API error code ${response.code}: $errBody")
-            return null
-        }
-
-        val responseBodyText = response.body?.string() ?: return null
-        val jsonResponse = JSONObject(responseBodyText)
-        val candidates = jsonResponse.optJSONArray("candidates") ?: return null
-        if (candidates.length() == 0) return null
-
-        val firstCandidate = candidates.getJSONObject(0)
-        val content = firstCandidate.optJSONObject("content") ?: return null
-        val parts = content.optJSONArray("parts") ?: return null
-        if (parts.length() == 0) return null
-
-        val rawText = parts.getJSONObject(0).optString("text", "")
+        )
+        val rawText = response.text ?: return null
         if (rawText.isBlank()) return null
 
+        return parseVisionJsonResponse(rawText, cropHint, categoryFilter)
+    }
+
+    private fun buildVisionPrompt(cropHint: String, categoryFilter: ThreatType?): String = buildString {
+        appendLine("You are an expert plant pathologist, agricultural entomologist, weed scientist, and pedologist diagnosing crop threats and soil profiles.")
+        appendLine("Use Infonet-Biovision (cultural/organic IPM), CABI BioProtection (biocontrol), and PCPB Kenya (registered agrochemicals) standards.")
+        appendLine()
+        appendLine("CRITICAL DISTINCTION (DO NOT CONFUSE PESTS AND DISEASES):")
+        appendLine("- Classify strictly as threatType='PEST' whenever you see:")
+        appendLine("  * Any insect, caterpillar, larva, pupa, moth, beetle, aphid, whitefly, thrips, mite, or leafhopper.")
+        appendLine("  * Ragged chewed holes, notched leaf margins, 'windowpaning', translucent blotch mines or serpentine tunnels inside leaves, sawdust/granular frass, bored fruit/stem holes, deadheart shoots, silk webbing, honeydew, sooty mold on sucking colonies, or silvery thrips scarring.")
+        appendLine("  * Even if secondary yellowing/necrosis surrounds chewed or mined areas, insect feeding damage is ALWAYS threatType='PEST', NEVER 'DISEASE'.")
+        appendLine("- Classify strictly as threatType='DISEASE' ONLY when pathogen symptoms dominate with no primary insect signs:")
+        appendLine("  * Water-soaked spreading dark blight with pale sporulation ring (Late Blight), concentric target rings (Early Blight), bright orange/brown powdery pustules (Rust), uniform talcum-white mycelium coating (Powdery Mildew), angular vein-bound purple lesions (Downy Mildew), green vascular wilt (Bacterial Wilt), or sunken pod cankers (Anthracnose).")
+        appendLine("- Classify as threatType='WEED' for parasitic or invasive weeds (e.g. Striga, Purple Nutsedge).")
+        appendLine("- Classify as threatType='SOIL' for soil profiles, texture, cracking clays, red volcanic nitisols, or pure abiotic soil scenes.")
+        appendLine()
+        if (cropHint != "Auto-Detect") {
+            appendLine("Farmer's stated crop context: $cropHint.")
+        }
+        if (categoryFilter != null) {
+            appendLine("The farmer explicitly filtered to domain: ${categoryFilter.name} (${categoryFilter.label}). Stay strictly within ${categoryFilter.name}.")
+        }
+        appendLine()
+        appendLine("Known CropShield catalog IDs (use exact threatId only if it truly matches the photo; otherwise use 'custom_pest', 'custom_disease', 'custom_weed', or 'custom_soil'):")
+        appendLine("PESTS: fall_armyworm, tuta_absoluta, african_bollworm, spider_mites, western_flower_thrips, aphids, maize_stalk_borer, maize_stem_borer, diamondback_moth, whiteflies, maruca_pod_borer, bean_fly")
+        appendLine("DISEASES: late_blight, early_blight, bacterial_wilt, bean_rust, cereal_rust, flower_rust, chrysanthemum_white_rust, rose_powdery_mildew, rose_downy_mildew, botrytis_blight, bean_anthracnose, mlnd, black_rot, purple_blotch_onion")
+        appendLine("WEEDS: weed_striga, weed_purple_nutsedge")
+        appendLine("SOIL: soil_humic_nitisol, soil_pellic_vertisol")
+    }
+
+    internal fun parseVisionJsonResponse(
+        rawText: String,
+        cropHint: String,
+        categoryFilter: ThreatType?
+    ): ScanDiagnosisResult {
         val parsedJson = JSONObject(rawText)
-        val threatId = parsedJson.optString("threatId", "late_blight").lowercase()
-        val matchedThreat = ThreatCatalog.allThreats.find { 
-            it.id.equals(threatId, ignoreCase = true) || 
-            it.name.contains(parsedJson.optString("diseaseName", ""), ignoreCase = true)
-        } ?: ThreatCatalog.allThreats.first()
+        val rawThreatId = parsedJson.optString("threatId", "").trim()
+        val rawTypeStr = parsedJson.optString("threatType", "").trim().uppercase(Locale.ROOT)
+        val returnedName = parsedJson.optString("diseaseName", "").trim()
+        val returnedScientific = parsedJson.optString("scientificName", "").trim()
+        val returnedSummary = parsedJson.optString("summary", "").trim()
+
+        val resolvedCategory = resolveThreatType(
+            rawTypeStr = rawTypeStr,
+            categoryFilter = categoryFilter,
+            rawThreatId = rawThreatId,
+            returnedName = returnedName,
+            summary = returnedSummary
+        )
+
+        // Match ONLY within the resolved domain so a PEST is NEVER mapped to late_blight (DISEASE)
+        val domainCatalog = ThreatCatalog.allThreats.filter { it.type == resolvedCategory }
+        val matchedThreat = domainCatalog.find { candidate ->
+            rawThreatId.isNotBlank() && candidate.id.equals(rawThreatId, ignoreCase = true)
+        } ?: domainCatalog.find { candidate ->
+            returnedName.isNotBlank() && (
+                candidate.name.contains(returnedName, ignoreCase = true) ||
+                    returnedName.contains(candidate.name, ignoreCase = true) ||
+                    (returnedScientific.isNotBlank() && candidate.scientificName.contains(returnedScientific, ignoreCase = true))
+                )
+        }
 
         val symptomsList = mutableListOf<String>()
         val symptomsArray = parsedJson.optJSONArray("symptoms")
         if (symptomsArray != null) {
             for (i in 0 until symptomsArray.length()) {
-                symptomsList.add(symptomsArray.getString(i))
+                val item = symptomsArray.optString(i, "").trim()
+                if (item.isNotBlank()) symptomsList.add(item)
             }
         }
-        if (symptomsList.isEmpty()) {
+        if (symptomsList.isEmpty() && matchedThreat != null) {
             symptomsList.addAll(matchedThreat.diagnosticKeys.take(3))
+        } else if (symptomsList.isEmpty()) {
+            symptomsList.add("Visual anomaly inspected under ${resolvedCategory.label} domain")
         }
 
         val chemicalsList = mutableListOf<String>()
         val chemArray = parsedJson.optJSONArray("recommendedChemicals")
         if (chemArray != null) {
             for (i in 0 until chemArray.length()) {
-                chemicalsList.add(chemArray.getString(i))
+                val chem = chemArray.optString(i, "").trim()
+                if (chem.isNotBlank()) chemicalsList.add(chem)
             }
         }
-        if (chemicalsList.isEmpty()) {
+        if (chemicalsList.isEmpty() && matchedThreat != null) {
             matchedThreat.pcpbChemicals.forEach { chem ->
                 chemicalsList.add("${chem.tradeName} (${chem.activeIngredient}) - ${chem.knapsackDosage}")
             }
         }
 
-        val selectedChem = matchedThreat.ipmPlan.chemicalControls.firstOrNull()
+        val selectedChem = matchedThreat?.ipmPlan?.chemicalControls?.firstOrNull()
+        val displayName = returnedName.ifBlank {
+            matchedThreat?.name ?: defaultDomainLabel(resolvedCategory)
+        }
+        val displayScientific = returnedScientific.ifBlank {
+            matchedThreat?.scientificName ?: "Unverified field species"
+        }
+        val displayCrop = parsedJson.optString("crop", "").ifBlank {
+            if (cropHint != "Auto-Detect") cropHint else matchedThreat?.targetCrops?.firstOrNull() ?: "General Field Crop"
+        }
 
         val cabiBiocontrol = parsedJson.optString("cabiBiocontrol", "").ifBlank {
-            matchedThreat.cabiBioProtections.firstOrNull()?.let { "${it.tradeName} (${it.activeAgent}) - ${it.modeOfAction}" } ?: ""
+            matchedThreat?.cabiBioProtections?.firstOrNull()?.let {
+                "${it.tradeName} (${it.activeAgent}) - ${it.modeOfAction}"
+            } ?: defaultCabiHint(resolvedCategory)
         }
 
         val infonetPractice = parsedJson.optString("infonetPractice", "").ifBlank {
-            matchedThreat.infonetPractices.firstOrNull()?.let { "${it.title}: ${it.description}" } ?: ""
+            matchedThreat?.infonetPractices?.firstOrNull()?.let {
+                "${it.title}: ${it.description}"
+            } ?: defaultCulturalHint(resolvedCategory)
         }
 
         val pcpbChem = parsedJson.optString("pcpbChemical", "").ifBlank {
-            matchedThreat.pcpbChemicals.firstOrNull()?.let { "${it.tradeName} [${it.pcpbRegNo}] - ${it.activeIngredient}. Knapsack: ${it.knapsackDosage}" } ?: ""
+            matchedThreat?.pcpbChemicals?.firstOrNull()?.let {
+                "${it.tradeName} [${it.pcpbRegNo}] - ${it.activeIngredient}. Knapsack: ${it.knapsackDosage}"
+            } ?: chemicalsList.firstOrNull().orEmpty()
         }
 
         return ScanDiagnosisResult(
             threat = matchedThreat,
-            threatId = matchedThreat.id,
-            diseaseName = parsedJson.optString("diseaseName", matchedThreat.name),
-            scientificName = parsedJson.optString("scientificName", matchedThreat.scientificName),
-            crop = parsedJson.optString("crop", if (cropHint != "Auto-Detect") cropHint else matchedThreat.targetCrops.firstOrNull() ?: "Tomato"),
-            confidencePercent = parsedJson.optInt("confidence", 94).coerceIn(75, 99),
-            severity = parsedJson.optString("severity", matchedThreat.severityLevel),
+            threatId = matchedThreat?.id ?: rawThreatId.ifBlank { "custom_${resolvedCategory.name.lowercase(Locale.ROOT)}" },
+            diseaseName = displayName,
+            scientificName = displayScientific,
+            crop = displayCrop,
+            confidencePercent = parsedJson.optInt("confidence", 90).coerceIn(50, 99),
+            severity = parsedJson.optString("severity", "").ifBlank { matchedThreat?.severityLevel ?: "Moderate" },
             visualSymptomsDetected = symptomsList,
-            recommendedCulturalAction = parsedJson.optString("culturalAction", matchedThreat.ipmPlan.culturalControls.firstOrNull() ?: ""),
+            recommendedCulturalAction = parsedJson.optString("culturalAction", "").ifBlank {
+                matchedThreat?.ipmPlan?.culturalControls?.firstOrNull() ?: defaultCulturalHint(resolvedCategory)
+            },
             recommendedChemicals = chemicalsList,
             recommendedChemicalObject = selectedChem,
             isOnlineAiAnalysis = true,
-            detailedAnalysisText = parsedJson.optString("summary", matchedThreat.summary),
+            detailedAnalysisText = returnedSummary.ifBlank {
+                matchedThreat?.summary ?: "Diagnosed by Gemini Vision AI within ${resolvedCategory.label} domain."
+            },
             cabiBiocontrolSolution = cabiBiocontrol,
             infonetOrganicAction = infonetPractice,
             pcpbRegisteredSolution = pcpbChem,
-            diagnosticCategory = matchedThreat.type,
-            identifiedName = parsedJson.optString("diseaseName", matchedThreat.name),
-            targetCropsList = matchedThreat.targetCrops,
-            vulnerableCropStages = matchedThreat.vulnerableCropStages,
-            yieldLossPotential = matchedThreat.yieldLossPotential,
-            economicThresholdInfo = matchedThreat.economicThresholdInfo,
-            mechanicalControlAction = parsedJson.optString("mechanicalAction", matchedThreat.mechanicalControls.firstOrNull() ?: "")
+            diagnosticCategory = resolvedCategory,
+            identifiedName = displayName,
+            targetCropsList = matchedThreat?.targetCrops ?: listOf(displayCrop),
+            vulnerableCropStages = matchedThreat?.vulnerableCropStages ?: "Active vegetative and reproductive stages",
+            yieldLossPotential = matchedThreat?.yieldLossPotential ?: "Variable depending on scouting threshold",
+            economicThresholdInfo = matchedThreat?.economicThresholdInfo ?: "Scout 20 plants per plot and intervene before threshold breach",
+            mechanicalControlAction = parsedJson.optString("mechanicalAction", "").ifBlank {
+                matchedThreat?.mechanicalControls?.firstOrNull()
+                    ?: matchedThreat?.ipmPlan?.physicalMechanicalControls?.firstOrNull()
+                    ?: "Hand-remove affected material and install traps"
+            }
         )
+    }
+
+    private fun resolveThreatType(
+        rawTypeStr: String,
+        categoryFilter: ThreatType?,
+        rawThreatId: String,
+        returnedName: String,
+        summary: String
+    ): ThreatType {
+        if (categoryFilter != null) return categoryFilter
+
+        when (rawTypeStr) {
+            "PEST" -> return ThreatType.PEST
+            "DISEASE" -> return ThreatType.DISEASE
+            "WEED" -> return ThreatType.WEED
+            "SOIL" -> return ThreatType.SOIL
+        }
+
+        // Check catalog match if model omitted threatType
+        val catalogHit = ThreatCatalog.allThreats.find { it.id.equals(rawThreatId, ignoreCase = true) }
+        if (catalogHit != null) return catalogHit.type
+
+        val text = "$returnedName $summary".lowercase(Locale.ROOT)
+        val pestSignals = listOf(
+            "worm", "caterpillar", "larva", "moth", "borer", "aphid", "mite", "thrips",
+            "whitefly", "whiteflies", "beetle", "weevil", "fly", "leafminer", "locust",
+            "hopper", "chew", "frass", "webbing", "insect", "pest"
+        )
+        return when {
+            pestSignals.any { text.contains(it) } -> ThreatType.PEST
+            text.contains("weed") || text.contains("striga") || text.contains("sedge") -> ThreatType.WEED
+            text.contains("soil") || text.contains("nitisol") || text.contains("vertisol") -> ThreatType.SOIL
+            else -> ThreatType.DISEASE
+        }
+    }
+
+    private fun findCatalogThreat(id: String, fallbackType: ThreatType): CropThreat {
+        return ThreatCatalog.allThreats.find { it.id == id && it.type == fallbackType }
+            ?: ThreatCatalog.allThreats.first { it.type == fallbackType }
     }
 
     /**
      * Resilient Offline Optical Symptom Engine.
-     * Evaluates RGB color ratios, necrotic margins, mildew sporulation,
-     * and chlorotic patterns from image pixels when offline.
+     * Distinguishes bright background/sky from genuine foliar white powdery mildew (requiring nearby green pixels),
+     * tracks foliar chew/perforation contrast edges, and strictly respects [categoryFilter].
      */
     fun analyzeOfflineOpticalPatterns(
         bitmap: Bitmap,
         cropHint: String = "Auto-Detect",
-        categoryFilter: ThreatType? = null
+        categoryFilter: ThreatType? = null,
+        analysisNotice: String? = null
     ): ScanDiagnosisResult {
-        val sampleWidth = 120
-        val sampleHeight = 120
+        val sampleWidth = 80
+        val sampleHeight = 80
         val scaled = Bitmap.createScaledBitmap(bitmap, sampleWidth, sampleHeight, false)
+        val pixels = IntArray(sampleWidth * sampleHeight)
+        scaled.getPixels(pixels, 0, sampleWidth, 0, 0, sampleWidth, sampleHeight)
+
+        fun isGreenPixel(pixel: Int): Boolean {
+            val r = AndroidColor.red(pixel)
+            val g = AndroidColor.green(pixel)
+            val b = AndroidColor.blue(pixel)
+            return g > r + 18 && g > b + 15 && g > 50
+        }
+
+        fun hasAdjacentGreen(x: Int, y: Int): Boolean {
+            for (dx in -2..2) {
+                for (dy in -2..2) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx
+                    val ny = y + dy
+                    if (nx in 0 until sampleWidth && ny in 0 until sampleHeight) {
+                        if (isGreenPixel(pixels[ny * sampleWidth + nx])) return true
+                    }
+                }
+            }
+            return false
+        }
 
         var darkNecroticCount = 0
         var yellowChloroticCount = 0
         var greenHealthyCount = 0
-        var whitePowderCount = 0
+        var foliarWhiteMildewCount = 0
+        var brightBackdropCount = 0
         var reddishPurpleCount = 0
         var rustOrangeCount = 0
         var redSoilCount = 0
         var darkClayCount = 0
+        var insectChewEdgeCount = 0
 
-        for (x in 0 until sampleWidth) {
-            for (y in 0 until sampleHeight) {
-                val pixel = scaled.getPixel(x, y)
+        for (y in 0 until sampleHeight) {
+            for (x in 0 until sampleWidth) {
+                val pixel = pixels[y * sampleWidth + x]
                 val r = AndroidColor.red(pixel)
                 val g = AndroidColor.green(pixel)
                 val b = AndroidColor.blue(pixel)
-
                 val brightness = (r + g + b) / 3
+                val chromaSpread = maxOf(r, g, b) - minOf(r, g, b)
 
-                // Red volcanic soil (Humic Nitisol)
-                if (r in 110..195 && g in 40..95 && b in 20..75 && r > g * 1.3f) {
-                    redSoilCount++
+                // Check contrast boundaries next to green foliage (chewed holes / ragged cuts / leaf mines)
+                val greenHere = isGreenPixel(pixel)
+                if (x + 1 < sampleWidth) {
+                    val rightPixel = pixels[y * sampleWidth + (x + 1)]
+                    if (greenHere != isGreenPixel(rightPixel)) {
+                        val lum2 = (AndroidColor.red(rightPixel) + AndroidColor.green(rightPixel) + AndroidColor.blue(rightPixel)) / 3
+                        if (kotlin.math.abs(brightness - lum2) > 55) {
+                            insectChewEdgeCount++
+                        }
+                    }
                 }
-                // Dark cracking clay soil (Pellic Vertisol)
-                else if (brightness in 20..85 && kotlin.math.abs(r - g) < 20 && kotlin.math.abs(g - b) < 20) {
-                    darkClayCount++
+                if (y + 1 < sampleHeight) {
+                    val downPixel = pixels[(y + 1) * sampleWidth + x]
+                    if (greenHere != isGreenPixel(downPixel)) {
+                        val lum2 = (AndroidColor.red(downPixel) + AndroidColor.green(downPixel) + AndroidColor.blue(downPixel)) / 3
+                        if (kotlin.math.abs(brightness - lum2) > 55) {
+                            insectChewEdgeCount++
+                        }
+                    }
                 }
-                // Dark greasy lesions / necrotic tissue
-                else if (brightness < 75 && (r > g * 0.8f)) {
-                    darkNecroticCount++
-                }
-                // Rust reddish-orange / cinnamon pustules
-                else if (r > 130 && g in 45..130 && b < 80 && (r > g * 1.25f)) {
-                    rustOrangeCount++
-                }
-                // White powdery coating / sporulation
-                else if (r > 195 && g > 195 && b > 195) {
-                    whitePowderCount++
-                }
-                // Yellow halo / chlorosis / stippling
-                else if (r > 160 && g > 150 && b < 100) {
-                    yellowChloroticCount++
-                }
-                // Purplish angular spots (Rose Downy Mildew / Striga pinkish-purple)
-                else if (r > 110 && b > 90 && g < 70) {
-                    reddishPurpleCount++
-                }
-                // Healthy foliage
-                else if (g > r + 20 && g > b + 20) {
-                    greenHealthyCount++
+
+                when {
+                    // Red volcanic soil (Humic Nitisol)
+                    r in 110..195 && g in 40..95 && b in 20..75 && r > g * 1.3f -> {
+                        redSoilCount++
+                    }
+                    // Dark cracking clay soil (Pellic Vertisol)
+                    brightness in 20..85 && chromaSpread < 20 -> {
+                        darkClayCount++
+                    }
+                    // Dark greasy lesions / necrotic tissue
+                    brightness < 75 && r > g * 0.8f -> {
+                        darkNecroticCount++
+                    }
+                    // Rust reddish-orange / cinnamon pustules
+                    r > 130 && g in 45..130 && b < 80 && r > g * 1.25f -> {
+                        rustOrangeCount++
+                    }
+                    // Matte whitish fungal mycelium vs blown-out white sky/paper/chewed holes
+                    r > 180 && g > 180 && b > 180 && chromaSpread < 28 -> {
+                        val isPureBackdropWhite = r > 238 && g > 238 && b > 238
+                        if (!isPureBackdropWhite && hasAdjacentGreen(x, y)) {
+                            foliarWhiteMildewCount++
+                        } else {
+                            brightBackdropCount++
+                        }
+                    }
+                    // Yellow halo / chlorosis / stippling
+                    r > 160 && g > 150 && b < 100 -> {
+                        yellowChloroticCount++
+                    }
+                    // Purplish angular spots (Downy Mildew / Striga)
+                    r > 110 && b > 90 && g < 70 -> {
+                        reddishPurpleCount++
+                    }
+                    // Healthy green foliage
+                    isGreenPixel(pixel) -> {
+                        greenHealthyCount++
+                    }
                 }
             }
         }
 
         val totalPixels = (sampleWidth * sampleHeight).toFloat()
-        val necroticRatio = darkNecroticCount / totalPixels
-        val yellowRatio = yellowChloroticCount / totalPixels
-        val whiteRatio = whitePowderCount / totalPixels
-        val purpleRatio = reddishPurpleCount / totalPixels
-        val rustRatio = rustOrangeCount / totalPixels
+        val subjectPixels = (totalPixels - brightBackdropCount).coerceAtLeast(1f)
+
+        val necroticRatio = darkNecroticCount / subjectPixels
+        val yellowRatio = yellowChloroticCount / subjectPixels
+        val foliarWhiteRatio = foliarWhiteMildewCount / subjectPixels
+        val purpleRatio = reddishPurpleCount / subjectPixels
+        val rustRatio = rustOrangeCount / subjectPixels
         val redSoilRatio = redSoilCount / totalPixels
         val darkClayRatio = darkClayCount / totalPixels
+        val chewEdgeRatio = insectChewEdgeCount / subjectPixels
+
+        val cropLower = cropHint.lowercase(Locale.ROOT)
+        val isMaizeOrCereal = cropLower.contains("maize") || cropLower.contains("cereal") || cropLower.contains("corn") ||
+            cropLower.contains("sorghum") || cropLower.contains("wheat") || cropLower.contains("barley")
+        val isTomatoOrPepper = cropLower.contains("tomato") || cropLower.contains("nyanya") ||
+            cropLower.contains("pepper") || cropLower.contains("eggplant") || cropLower.contains("potato") || cropLower.contains("viazi")
+        val isBrassica = cropLower.contains("cabbage") || cropLower.contains("kale") ||
+            cropLower.contains("sukuma") || cropLower.contains("broccoli") || cropLower.contains("brassica")
+        val isCutFlower = cropLower.contains("rose") || cropLower.contains("carnation") ||
+            cropLower.contains("flower") || cropLower.contains("chrysanthemum") || cropLower.contains("ornamental")
+        val isLegume = cropLower.contains("bean") || cropLower.contains("legume") ||
+            cropLower.contains("pea") || cropLower.contains("cowpea")
 
         val matchedThreat: CropThreat
         val severity: String
         val symptomsDetected = mutableListOf<String>()
 
-        val cropLower = cropHint.lowercase()
-        val isMaizeOrCereal = cropLower.contains("maize") || cropLower.contains("cereal") || cropLower.contains("corn") || cropLower.contains("sorghum") || cropLower.contains("wheat") || cropLower.contains("barley")
-        val isTomatoOrPepper = cropLower.contains("tomato") || cropLower.contains("nyanya") || cropLower.contains("pepper") || cropLower.contains("eggplant")
-        val isPotato = cropLower.contains("potato") || cropLower.contains("viazi")
-        val isBrassica = cropLower.contains("cabbage") || cropLower.contains("kale") || cropLower.contains("sukuma") || cropLower.contains("broccoli") || cropLower.contains("brassica")
-        val isCutFlower = cropLower.contains("rose") || cropLower.contains("carnation") || cropLower.contains("flower") || cropLower.contains("chrysanthemum") || cropLower.contains("ornamental")
-        val isLegume = cropLower.contains("bean") || cropLower.contains("legume") || cropLower.contains("pea") || cropLower.contains("cowpea")
-
         when {
-            // Category Filter: Soil Profile & Health Diagnostics
+            // 1. Soil Profile Diagnostics
             categoryFilter == ThreatType.SOIL || (categoryFilter == null && (redSoilRatio > 0.35f || darkClayRatio > 0.35f)) -> {
                 if (redSoilRatio >= darkClayRatio) {
-                    matchedThreat = ThreatCatalog.allThreats.find { it.id == "soil_humic_nitisol" } ?: ThreatCatalog.allThreats.first()
+                    matchedThreat = findCatalogThreat("soil_humic_nitisol", ThreatType.SOIL)
                     severity = "Moderate"
                     symptomsDetected.add("Deep dusky red to dark reddish-brown friable clay loam profile (Nitisol)")
-                    symptomsDetected.add("High phosphorus fixation hazard due to active iron/aluminum sesquioxides")
-                    symptomsDetected.add("Subsoil leaching of exchangeable bases (Ca²⁺, Mg²⁺)")
+                    symptomsDetected.add("High phosphorus fixation hazard due to iron/aluminum sesquioxides")
+                    symptomsDetected.add("Recommended: Dolomitic lime & rock phosphate enrichment")
                 } else {
-                    matchedThreat = ThreatCatalog.allThreats.find { it.id == "soil_pellic_vertisol" } ?: ThreatCatalog.allThreats.first()
+                    matchedThreat = findCatalogThreat("soil_pellic_vertisol", ThreatType.SOIL)
                     severity = "Severe"
                     symptomsDetected.add("Dark grey/black swelling-shrinking montmorillonite clay profile (Vertisol)")
-                    symptomsDetected.add("Deep surface dessication cracks and high plastic compaction when moist")
-                    symptomsDetected.add("Poor subsoil aeration and severe seasonal waterlogging hazard")
+                    symptomsDetected.add("Surface desiccation cracks and drainage restriction hazard")
+                    symptomsDetected.add("Recommended: Raised camber beds & gypsum soil conditioning")
                 }
             }
 
-            // Category Filter: Invasive & Indicator Weeds
+            // 2. Invasive & Indicator Weeds
             categoryFilter == ThreatType.WEED || cropLower.contains("weed") || cropLower.contains("striga") || cropLower.contains("nutsedge") -> {
                 if (cropLower.contains("striga") || isMaizeOrCereal || purpleRatio > 0.02f) {
-                    matchedThreat = ThreatCatalog.allThreats.find { it.id == "weed_striga" } ?: ThreatCatalog.allThreats.first()
+                    matchedThreat = findCatalogThreat("weed_striga", ThreatType.WEED)
                     severity = "Extreme"
-                    symptomsDetected.add("Pink-purple spiked parasitic blossoms emerging beside cereal root crowns")
-                    symptomsDetected.add("Severe host cereal chlorosis, scorching, and growth stunting")
-                    symptomsDetected.add("Edaphic Indicator: Severe soil nitrogen (N) and phosphorus (P) depletion")
+                    symptomsDetected.add("Pink-purple parasitic flowers beside stunted cereal stems")
+                    symptomsDetected.add("Edaphic indicator: Low soil nitrogen (N) and organic carbon")
                 } else {
-                    matchedThreat = ThreatCatalog.allThreats.find { it.id == "weed_purple_nutsedge" } ?: ThreatCatalog.allThreats.first()
+                    matchedThreat = findCatalogThreat("weed_purple_nutsedge", ThreatType.WEED)
                     severity = "High"
-                    symptomsDetected.add("Triangular stems with dark reddish-purple spikelets clustered in rosettes")
-                    symptomsDetected.add("Prolific subterranean network of dormant tubers and fibrous rhizomes")
-                    symptomsDetected.add("Edaphic Indicator: Dense plow pan compaction and periodic waterlogging")
+                    symptomsDetected.add("Triangular sedge stems with clustered reddish-purple spikelets")
+                    symptomsDetected.add("Edaphic indicator: Subsoil compaction and moisture retention")
                 }
             }
 
-            // EXPLICIT PEST MODE (Farmer selected Insect Pests category)
+            // 3. Explicit PEST Filter (NEVER return a DISEASE!)
             categoryFilter == ThreatType.PEST -> {
                 when {
                     isMaizeOrCereal -> {
-                        if (necroticRatio > 0.06f || yellowRatio > 0.05f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "fall_armyworm" } ?: ThreatCatalog.allThreats.first()
+                        if (chewEdgeRatio > 0.04f || necroticRatio > 0.06f || yellowRatio > 0.05f) {
+                            matchedThreat = findCatalogThreat("fall_armyworm", ThreatType.PEST)
                             severity = "Extreme"
-                            symptomsDetected.add("Ragged leaf chewing with copious brown frass mounds packed in the whorl")
-                            symptomsDetected.add("Larval window-paning and skeletonization across corn leaf blades")
-                            symptomsDetected.add("Larvae with inverted 'Y' head suture and 4 abdominal pins")
+                            symptomsDetected.add("Ragged whorl chewing with sawdust-like larval frass")
+                            symptomsDetected.add("Window-paning and skeletonization across unfolding corn blades")
                         } else {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "maize_stem_borer" } ?: ThreatCatalog.allThreats.first()
+                            matchedThreat = findCatalogThreat("maize_stem_borer", ThreatType.PEST)
                             severity = "High"
-                            symptomsDetected.add("Window-paning foliage and shot-hole perforations across unfolding leaves")
-                            symptomsDetected.add("Larval tunneling inside central stalks resulting in 'dead heart'")
-                            symptomsDetected.add("Sawdust-like frass extruding from stem entry perforations")
+                            symptomsDetected.add("Shot-hole perforations across leaves and central deadheart")
+                            symptomsDetected.add("Internal stem tunneling by stalk borer larvae")
                         }
                     }
                     isTomatoOrPepper -> {
-                        if (yellowRatio > 0.06f && necroticRatio < 0.11f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "tuta_absoluta" } ?: ThreatCatalog.allThreats.first()
+                        if (chewEdgeRatio > 0.05f || yellowRatio > 0.05f) {
+                            matchedThreat = findCatalogThreat("tuta_absoluta", ThreatType.PEST)
                             severity = "Extreme"
-                            symptomsDetected.add("Translucent papery blotch mines across leaflets with granular frass inside")
-                            symptomsDetected.add("Pinhead entrance holes bored beneath green tomato fruit calyxes")
-                            symptomsDetected.add("Extensive foliar scorching and premature canopy collapse")
-                        } else if (whiteRatio > 0.06f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "whiteflies" } ?: ThreatCatalog.allThreats.first()
+                            symptomsDetected.add("Translucent papery blotch mines in tomato leaflets with dark frass")
+                            symptomsDetected.add("Pinhead boreholes beneath green fruit calyxes")
+                        } else if (foliarWhiteRatio > 0.05f) {
+                            matchedThreat = findCatalogThreat("whiteflies", ThreatType.PEST)
                             severity = "High"
-                            symptomsDetected.add("Tiny white piercing-sucking insects fluttering under leaves")
-                            symptomsDetected.add("Chlorotic yellow mosaic mottling and upward leaf cupping (TYLCV)")
-                            symptomsDetected.add("Sticky honeydew with developing black sooty mold fungus")
+                            symptomsDetected.add("White piercing-sucking adults fluttering on leaf undersides")
+                            symptomsDetected.add("Honeydew secretion and upward leaf curling")
                         } else {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "african_bollworm" } ?: ThreatCatalog.allThreats.first()
+                            matchedThreat = findCatalogThreat("african_bollworm", ThreatType.PEST)
                             severity = "Severe"
-                            symptomsDetected.add("Circular chewed entry cavities bored into tomato fruits and flower buds")
-                            symptomsDetected.add("Caterpillar feeding on internal fruit locules with wet frass exudate")
-                            symptomsDetected.add("Secondary fruit rot and early blossom abortion")
+                            symptomsDetected.add("Circular caterpillar entry holes into fruits and flower buds")
+                            symptomsDetected.add("Internal locule feeding with frass deposits")
                         }
                     }
                     isBrassica -> {
-                        if (yellowRatio > 0.12f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "aphids" } ?: ThreatCatalog.allThreats.first()
+                        if (yellowRatio > 0.10f && chewEdgeRatio < 0.06f) {
+                            matchedThreat = findCatalogThreat("aphids", ThreatType.PEST)
                             severity = "High"
-                            symptomsDetected.add("Dense waxy gray-green aphid colonies clustering on young inner leaves")
-                            symptomsDetected.add("Severe leaf crinkling, cupping, and stunted head formation")
-                            symptomsDetected.add("Sticky honeydew secretions attracting secondary sooty mold")
+                            symptomsDetected.add("Dense waxy grey-green aphid colonies curling young brassica leaves")
+                            symptomsDetected.add("Honeydew accumulation attracting secondary sooty mold")
                         } else {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "diamondback_moth" } ?: ThreatCatalog.allThreats.first()
+                            matchedThreat = findCatalogThreat("diamondback_moth", ThreatType.PEST)
                             severity = "High"
-                            symptomsDetected.add("Translucent 'window-paning' feeding perforations in lower leaf epidermis")
-                            symptomsDetected.add("Skeletonized foliage with ragged leaf margins")
-                            symptomsDetected.add("Spindle-shaped pale green caterpillars wriggling on silken threads")
+                            symptomsDetected.add("Translucent 'window-paning' perforations in cabbage/kale epidermis")
+                            symptomsDetected.add("Pale green caterpillars wriggling when disturbed")
                         }
                     }
                     isCutFlower -> {
                         if (yellowRatio > 0.07f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "spider_mites" } ?: ThreatCatalog.allThreats.first()
+                            matchedThreat = findCatalogThreat("spider_mites", ThreatType.PEST)
                             severity = "Extreme"
-                            symptomsDetected.add("Fine yellow/white stippling flecks across upper leaf lamina")
-                            symptomsDetected.add("Silken webbing stretching across leaf undersides and flower buds")
-                            symptomsDetected.add("Foliar bronzing, parchment desiccation, and severe leaf drop")
-                        } else if (purpleRatio > 0.03f || necroticRatio > 0.05f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "western_flower_thrips" } ?: ThreatCatalog.allThreats.first()
+                            symptomsDetected.add("Chlorotic stippling speckles and fine webbing across foliage")
+                            symptomsDetected.add("Bronzed desiccated leaves with mite colonies underneath")
+                        } else if (purpleRatio > 0.03f || necroticRatio > 0.05f || chewEdgeRatio > 0.04f) {
+                            matchedThreat = findCatalogThreat("western_flower_thrips", ThreatType.PEST)
                             severity = "Extreme"
-                            symptomsDetected.add("Silvery bleached feeding scars on flower petals with black tar frass specks")
-                            symptomsDetected.add("Distorted, puckered buds and necrotic petal margin scorch")
-                            symptomsDetected.add("Active slender thrips scurrying inside bloom petals")
+                            symptomsDetected.add("Silvery scarred petals with black tar fecal specks")
+                            symptomsDetected.add("Deformed, puckered buds from rasping-sucking feeding")
                         } else {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "aphids" } ?: ThreatCatalog.allThreats.first()
+                            matchedThreat = findCatalogThreat("aphids", ThreatType.PEST)
                             severity = "High"
-                            symptomsDetected.add("Clustered green/pink aphid colonies on tender terminal rose stems")
-                            symptomsDetected.add("Sticky honeydew causing black sooty mold across blooms")
+                            symptomsDetected.add("Soft-bodied aphid clusters along tender shoots and flower buds")
                         }
                     }
                     isLegume -> {
-                        if (necroticRatio > 0.08f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "maruca_pod_borer" } ?: ThreatCatalog.allThreats.first()
+                        if (necroticRatio > 0.08f || chewEdgeRatio > 0.05f) {
+                            matchedThreat = findCatalogThreat("maruca_pod_borer", ThreatType.PEST)
                             severity = "Severe"
-                            symptomsDetected.add("Webbed flower clusters and bored pods with frass extrusions")
-                            symptomsDetected.add("Larvae consuming reproductive buds, causing flower shedding")
+                            symptomsDetected.add("Webbed flower clusters and bored holes in developing pods")
                         } else {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "african_bollworm" } ?: ThreatCatalog.allThreats.first()
+                            matchedThreat = findCatalogThreat("african_bollworm", ThreatType.PEST)
                             severity = "Severe"
-                            symptomsDetected.add("Caterpillars boring into legume pods and consuming developing seeds")
-                            symptomsDetected.add("Aborted flower buds and premature pod desiccation")
+                            symptomsDetected.add("Larval feeding cavities in legume pods and blossoms")
                         }
                     }
                     else -> {
-                        // General Pest Candidate
-                        if (yellowRatio > 0.13f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "aphids" } ?: ThreatCatalog.allThreats.first()
-                            severity = "High"
-                            symptomsDetected.add("Clustered colonies of piercing-sucking aphids on foliage")
-                            symptomsDetected.add("Leaf curling, downward cupping, and sticky honeydew exudate")
-                        } else if (yellowRatio > 0.07f) {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "spider_mites" } ?: ThreatCatalog.allThreats.first()
-                            severity = "High"
-                            symptomsDetected.add("Chlorotic stippling and fine webbing on leaf undersides")
-                        } else {
-                            matchedThreat = ThreatCatalog.allThreats.find { it.id == "fall_armyworm" } ?: ThreatCatalog.allThreats.first()
+                        if (chewEdgeRatio > 0.05f) {
+                            matchedThreat = findCatalogThreat("fall_armyworm", ThreatType.PEST)
                             severity = "Severe"
-                            symptomsDetected.add("Chewed foliar perforations and ragged leaf margins caused by larvae")
+                            symptomsDetected.add("Ragged chewed leaf margins and perforated lamina characteristic of caterpillars")
+                        } else if (yellowRatio > 0.12f) {
+                            matchedThreat = findCatalogThreat("aphids", ThreatType.PEST)
+                            severity = "High"
+                            symptomsDetected.add("Clustering sap-sucking colonies with leaf curl and honeydew")
+                        } else if (yellowRatio > 0.06f) {
+                            matchedThreat = findCatalogThreat("spider_mites", ThreatType.PEST)
+                            severity = "High"
+                            symptomsDetected.add("Chlorotic stippling flecks and fine webbing on leaf undersides")
+                        } else {
+                            matchedThreat = findCatalogThreat("african_bollworm", ThreatType.PEST)
+                            severity = "Moderate"
+                            symptomsDetected.add("Localized chewing and larval feeding cavities on foliage/fruit")
                         }
                     }
                 }
             }
 
-            // AUTO-DETECT MODE: Balanced Pest & Disease Identification
-            // 1. Maize & Cereals -> Fall Armyworm vs Rust
+            // 4. Explicit DISEASE Filter (NEVER return a PEST!)
+            categoryFilter == ThreatType.DISEASE -> {
+                when {
+                    isMaizeOrCereal -> {
+                        matchedThreat = findCatalogThreat(if (rustRatio > 0.02f) "cereal_rust" else "mlnd", ThreatType.DISEASE)
+                        severity = "High"
+                        symptomsDetected.add("Pathogenic leaf streaks/pustules aligned along cereal vascular veins")
+                    }
+                    isCutFlower && foliarWhiteRatio > 0.04f -> {
+                        matchedThreat = findCatalogThreat("rose_powdery_mildew", ThreatType.DISEASE)
+                        severity = "Severe"
+                        symptomsDetected.add("Talcum-white fungal mycelium patches on leaves and rose buds")
+                    }
+                    isCutFlower && purpleRatio > 0.03f -> {
+                        matchedThreat = findCatalogThreat("rose_downy_mildew", ThreatType.DISEASE)
+                        severity = "Extreme"
+                        symptomsDetected.add("Angular purplish-red lesions bounded by leaf veins")
+                    }
+                    isCutFlower && rustRatio > 0.02f -> {
+                        matchedThreat = findCatalogThreat("flower_rust", ThreatType.DISEASE)
+                        severity = "Severe"
+                        symptomsDetected.add("Cinnamon-brown rust pustules erupting on foliage and stems")
+                    }
+                    isLegume && rustRatio > 0.02f -> {
+                        matchedThreat = findCatalogThreat("bean_rust", ThreatType.DISEASE)
+                        severity = "Severe"
+                        symptomsDetected.add("Reddish-brown powdery uredinia pustules encircled by yellow halos")
+                    }
+                    isLegume -> {
+                        matchedThreat = findCatalogThreat("bean_anthracnose", ThreatType.DISEASE)
+                        severity = "Severe"
+                        symptomsDetected.add("Dark sunken cankers with salmon spore masses along pods and veins")
+                    }
+                    else -> {
+                        if (necroticRatio > 0.14f || foliarWhiteRatio > 0.06f) {
+                            matchedThreat = findCatalogThreat("late_blight", ThreatType.DISEASE)
+                            severity = "Severe"
+                            symptomsDetected.add("Water-soaked spreading necrotic blight with pale sporulation ring")
+                        } else if (rustRatio > 0.02f) {
+                            matchedThreat = findCatalogThreat("bean_rust", ThreatType.DISEASE)
+                            severity = "High"
+                            symptomsDetected.add("Powdery rust pustules on foliar epidermis")
+                        } else {
+                            matchedThreat = findCatalogThreat("early_blight", ThreatType.DISEASE)
+                            severity = "Moderate"
+                            symptomsDetected.add("Concentric target-ring brown lesions on older lower leaves")
+                        }
+                    }
+                }
+            }
+
+            // 5. AUTO-DETECT MODE: Balanced Pest vs Disease Discrimination
+            // Cereals / Maize
             isMaizeOrCereal && rustRatio > 0.035f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "cereal_rust" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("cereal_rust", ThreatType.DISEASE)
                 severity = "Extreme"
-                symptomsDetected.add("Golden-brown to reddish-orange powdery pustules rupturing leaf epidermis")
-                symptomsDetected.add("Linear rust stripes and chlorotic streaks on cereal leaf blades")
+                symptomsDetected.add("Golden-brown to reddish-orange powdery rust pustules on cereal leaves")
             }
             isMaizeOrCereal -> {
-                // Maize without prominent rust pustules is overwhelmingly Fall Armyworm or Stem Borer in East Africa
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "fall_armyworm" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("fall_armyworm", ThreatType.PEST)
                 severity = "High"
-                symptomsDetected.add("Window-paning foliage with ragged chewed leaf whorl")
-                symptomsDetected.add("Moist brown frass sawdust packed in central vegetative cup")
-                symptomsDetected.add("Larval skeletonization on upper corn leaf blades")
+                symptomsDetected.add("Window-paning foliage with ragged chewed whorl & sawdust frass")
             }
 
-            // 2. Brassicas (Cabbage, Sukuma Wiki, Kale) -> Diamondback Moth vs Aphids
-            isBrassica && yellowRatio > 0.12f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "aphids" } ?: ThreatCatalog.allThreats.first()
+            // Brassicas
+            isBrassica && yellowRatio > 0.12f && chewEdgeRatio < 0.06f -> {
+                matchedThreat = findCatalogThreat("aphids", ThreatType.PEST)
                 severity = "High"
-                symptomsDetected.add("Dense waxy aphid colonies clustered on lower leaf surfaces")
-                symptomsDetected.add("Leaf curling, puckering, and stunting of heading brassicas")
+                symptomsDetected.add("Waxy aphid colonies clustering on curled brassica foliage")
             }
             isBrassica -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "diamondback_moth" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("diamondback_moth", ThreatType.PEST)
                 severity = "High"
-                symptomsDetected.add("Translucent 'window-paning' feeding perforations in lower leaf epidermis")
-                symptomsDetected.add("Skeletonized foliage with ragged leaf margins")
-                symptomsDetected.add("Spindle-shaped pale green caterpillars wriggling on silken threads")
+                symptomsDetected.add("Translucent window-paning holes and skeletonized leaves")
             }
 
-            // 3. Cut Flowers (Roses, Carnations) -> Spider Mites, Thrips, Rust, Mildews
-            isCutFlower && whiteRatio > 0.05f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "rose_powdery_mildew" } ?: ThreatCatalog.allThreats.first()
+            // Cut Flowers
+            isCutFlower && foliarWhiteRatio > 0.06f -> {
+                matchedThreat = findCatalogThreat("rose_powdery_mildew", ThreatType.DISEASE)
                 severity = "Severe"
-                symptomsDetected.add("White powdery talcum-like conidial patches on foliage and buds")
-                symptomsDetected.add("Curling and puckering of young terminal rose leaves")
+                symptomsDetected.add("White powdery conidial patches on live green rose leaves")
             }
             isCutFlower && purpleRatio > 0.04f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "rose_downy_mildew" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("rose_downy_mildew", ThreatType.DISEASE)
                 severity = "Extreme"
-                symptomsDetected.add("Angular purplish-red to dark brown necrotic spots delimited by veins")
-                symptomsDetected.add("Severe premature leaf abscission; defoliated stems ('goose neck')")
+                symptomsDetected.add("Angular purplish-red vein-delimited lesions")
             }
-            isCutFlower && rustRatio > 0.02f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "flower_rust" } ?: ThreatCatalog.allThreats.first()
+            isCutFlower && rustRatio > 0.025f -> {
+                matchedThreat = findCatalogThreat("flower_rust", ThreatType.DISEASE)
                 severity = "Extreme"
-                symptomsDetected.add("Dark cinnamon to chocolate-brown powdery rust pustules on stems and foliage")
+                symptomsDetected.add("Chocolate-brown rust pustules on stems and foliage")
             }
             isCutFlower && yellowRatio > 0.07f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "spider_mites" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("spider_mites", ThreatType.PEST)
                 severity = "High"
-                symptomsDetected.add("Chlorotic pale yellow speckling (stippling) on upper leaf lamina")
-                symptomsDetected.add("Fine silken webbing across leaf undersides and shoot tips")
-                symptomsDetected.add("Foliar bronzing and desiccated parchment texture")
+                symptomsDetected.add("Chlorotic stippling flecks and fine webbing on leaf undersides")
             }
             isCutFlower -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "western_flower_thrips" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("western_flower_thrips", ThreatType.PEST)
                 severity = "High"
-                symptomsDetected.add("Silvery bleached feeding patches on petals with tar-like black fecal droplets")
-                symptomsDetected.add("Necrotic petal scorch and distorted opening buds")
+                symptomsDetected.add("Silvery bleached scarring on petals and buds with black fecal specks")
             }
 
-            // 4. Tomato / Solanaceae -> Late Blight vs Tuta Absoluta vs African Bollworm
-            isTomatoOrPepper && (whiteRatio > 0.05f || (necroticRatio > 0.15f && yellowRatio < 0.05f)) -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "late_blight" } ?: ThreatCatalog.allThreats.first()
+            // Tomato / Solanaceae: prioritize chewed/mined edge contrast as PEST before blight
+            isTomatoOrPepper && chewEdgeRatio > 0.07f -> {
+                matchedThreat = findCatalogThreat("tuta_absoluta", ThreatType.PEST)
+                severity = "Extreme"
+                symptomsDetected.add("High-contrast translucent blotch mines and ragged holes typical of Tomato Leafminer")
+                symptomsDetected.add("Confirm lack of water-soaked fungal stem collars to rule out Late Blight")
+            }
+            isTomatoOrPepper && ((foliarWhiteRatio > 0.06f && necroticRatio > 0.08f) || (necroticRatio > 0.18f && yellowRatio < 0.05f)) -> {
+                matchedThreat = findCatalogThreat("late_blight", ThreatType.DISEASE)
                 severity = "Severe"
-                symptomsDetected.add("Irregular water-soaked brown lesions rapidly spreading across lamina")
-                symptomsDetected.add("Cottony white mycelial sporulation ring visible on lesion margins")
-                symptomsDetected.add("Greasy darkening and stem collar necrosis")
+                symptomsDetected.add("Water-soaked spreading necrotic blight with white sporulation margin on green tissue")
             }
             isTomatoOrPepper && yellowRatio in 0.06f..0.14f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "tuta_absoluta" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("tuta_absoluta", ThreatType.PEST)
                 severity = "Extreme"
                 symptomsDetected.add("Translucent papery blotch mines between leaf epidermises")
-                symptomsDetected.add("Dark granular frass piles inside leaf mines and under green fruit calyx")
             }
-            isTomatoOrPepper && necroticRatio > 0.08f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "african_bollworm" } ?: ThreatCatalog.allThreats.first()
+            isTomatoOrPepper -> {
+                matchedThreat = findCatalogThreat("african_bollworm", ThreatType.PEST)
                 severity = "Severe"
-                symptomsDetected.add("Circular chewed entry holes bored into tomato fruits and flower buds")
-                symptomsDetected.add("Internal fruit cavity feeding with secondary rot")
+                symptomsDetected.add("Localized chewing and larval boreholes on tomato fruits/buds")
             }
 
-            // 5. Legumes (French Beans, Common Beans) -> Rust vs Maruca Pod Borer vs Spider Mites
+            // Legumes
             isLegume && rustRatio > 0.025f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "bean_rust" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("bean_rust", ThreatType.DISEASE)
                 severity = "Severe"
-                symptomsDetected.add("Reddish-brown powdery rust pustules (uredinia) on leaf undersides")
-                symptomsDetected.add("Pronounced chlorotic yellow halos encircling erupting pustules")
+                symptomsDetected.add("Reddish-brown powdery rust pustules encircled by yellow halos")
             }
-            isLegume && necroticRatio > 0.08f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "maruca_pod_borer" } ?: ThreatCatalog.allThreats.first()
+            isLegume && (necroticRatio > 0.08f || chewEdgeRatio > 0.06f) -> {
+                matchedThreat = findCatalogThreat("maruca_pod_borer", ThreatType.PEST)
                 severity = "Severe"
-                symptomsDetected.add("Webbed floral clusters and circular boreholes in developing bean pods")
+                symptomsDetected.add("Webbed flowers and bored bean pods with frass")
             }
             isLegume -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "spider_mites" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("spider_mites", ThreatType.PEST)
                 severity = "Moderate"
-                symptomsDetected.add("Stippling speckles on bean foliage and fine webbing on leaf undersides")
+                symptomsDetected.add("Stippling speckles on bean leaves and underside webbing")
             }
 
-            // 6. General Fallbacks
+            // General Auto-Detect Fallbacks (Pest patterns checked cleanly vs genuine foliar fungal signals)
             rustRatio > 0.025f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "cereal_rust" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("cereal_rust", ThreatType.DISEASE)
                 severity = "High"
-                symptomsDetected.add("Powdery reddish-orange pustules rupturing leaf surface")
+                symptomsDetected.add("Powdery reddish-orange pustules rupturing leaf epidermis")
             }
-            whiteRatio > 0.05f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "rose_powdery_mildew" } ?: ThreatCatalog.allThreats.first()
+            chewEdgeRatio > 0.05f -> {
+                matchedThreat = findCatalogThreat("fall_armyworm", ThreatType.PEST)
+                severity = "Severe"
+                symptomsDetected.add("Sharp chewed perforation borders across green foliage indicative of insect feeding")
+            }
+            foliarWhiteRatio > 0.07f -> {
+                matchedThreat = findCatalogThreat("rose_powdery_mildew", ThreatType.DISEASE)
                 severity = "Moderate"
-                symptomsDetected.add("White powdery mycelium coating foliar tissue")
+                symptomsDetected.add("White powdery fungal coating adhered directly to green foliar tissue")
             }
             yellowRatio > 0.14f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "aphids" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("aphids", ThreatType.PEST)
                 severity = "Moderate"
-                symptomsDetected.add("Leaf curling with sticky shiny honeydew exudate")
-                symptomsDetected.add("Dense colonial clustering of tiny soft-bodied insects on leaf undersides")
+                symptomsDetected.add("Leaf curling with chlorotic stress and piercing-sucking colony patterns")
             }
-            yellowRatio in 0.07f..0.14f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "spider_mites" } ?: ThreatCatalog.allThreats.first()
+            yellowRatio in 0.06f..0.14f -> {
+                matchedThreat = findCatalogThreat("spider_mites", ThreatType.PEST)
                 severity = "High"
-                symptomsDetected.add("Chlorotic yellow speckling (stippling) on upper leaf lamina")
-                symptomsDetected.add("Fine silken webbing across leaf undersides")
+                symptomsDetected.add("Chlorotic stippling flecks and bronzing on upper leaf lamina")
             }
-            necroticRatio > 0.12f -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "late_blight" } ?: ThreatCatalog.allThreats.first()
+            necroticRatio > 0.16f -> {
+                matchedThreat = findCatalogThreat("late_blight", ThreatType.DISEASE)
                 severity = "Severe"
-                symptomsDetected.add("Water-soaked dark lesions on leaf tips & margins")
-                symptomsDetected.add("Faint sporulation halo under high humidity conditions")
+                symptomsDetected.add("Extensive water-soaked dark necrotic blight along leaf margins")
             }
             else -> {
-                matchedThreat = ThreatCatalog.allThreats.find { it.id == "african_bollworm" } ?: ThreatCatalog.allThreats.first()
+                matchedThreat = findCatalogThreat("african_bollworm", ThreatType.PEST)
                 severity = "Moderate"
-                symptomsDetected.add("Caterpillar foliar chew damage and circular perforation cavities")
+                symptomsDetected.add("Localized foliar chewing / feeding perforation patterns")
             }
         }
 
-        val confidence = 68 // Honest optical pre-screening confidence
+        val confidence = 68
         val selectedChem = matchedThreat.ipmPlan.chemicalControls.firstOrNull()
 
         val pcpbChem = matchedThreat.pcpbChemicals.firstOrNull()?.let {
@@ -670,18 +866,25 @@ object PhotoDiseaseScanner {
             "${it.title} - ${it.description}"
         } ?: ""
 
-        val analysisText = "Optical Chromatic Pre-Screening: Foliar Health ${(greenHealthyCount * 100f / totalPixels).toInt()}%, Chlorosis/Yellowing ${(yellowRatio * 100f).toInt()}%, Necrotic Lesions ${(necroticRatio * 100f).toInt()}%. Candidate identification: ${matchedThreat.name} (${matchedThreat.scientificName}). To verify factual accuracy and avoid false positives, confirm against the physical field symptoms: ${symptomsDetected.joinToString("; ")}. Use the Factual Symptom Key to confirm."
+        val analysisText = "Offline Optical Pre-Screening (${matchedThreat.type.label}): " +
+            "Green Foliage ${(greenHealthyCount * 100f / subjectPixels).toInt()}%, " +
+            "Chlorosis ${(yellowRatio * 100f).toInt()}%, " +
+            "Necrosis ${(necroticRatio * 100f).toInt()}%, " +
+            "Chew/Edge Contrast ${(chewEdgeRatio * 100f).toInt()}%. " +
+            "Candidate: ${matchedThreat.name} (${matchedThreat.scientificName}). " +
+            "Confirm physical field signs (${symptomsDetected.joinToString("; ")}) or select the Pest/Disease domain filter above."
 
         return ScanDiagnosisResult(
             threat = matchedThreat,
             threatId = matchedThreat.id,
             diseaseName = matchedThreat.name,
             scientificName = matchedThreat.scientificName,
-            crop = if (cropHint != "Auto-Detect") cropHint else matchedThreat.targetCrops.firstOrNull() ?: "Tomato",
+            crop = if (cropHint != "Auto-Detect") cropHint else matchedThreat.targetCrops.firstOrNull() ?: "General Field Crop",
             confidencePercent = confidence,
             severity = severity,
             visualSymptomsDetected = symptomsDetected,
-            recommendedCulturalAction = matchedThreat.ipmPlan.culturalControls.firstOrNull() ?: "Prune and burn infected plant parts; avoid evening sprinkler irrigation.",
+            recommendedCulturalAction = matchedThreat.ipmPlan.culturalControls.firstOrNull()
+                ?: "Inspect plot perimeter and remove severely affected tissue.",
             recommendedChemicals = matchedThreat.pcpbChemicals.map { "${it.tradeName} (${it.activeIngredient}) - ${it.knapsackDosage}" },
             recommendedChemicalObject = selectedChem,
             isOnlineAiAnalysis = false,
@@ -695,7 +898,30 @@ object PhotoDiseaseScanner {
             vulnerableCropStages = matchedThreat.vulnerableCropStages,
             yieldLossPotential = matchedThreat.yieldLossPotential,
             economicThresholdInfo = matchedThreat.economicThresholdInfo,
-            mechanicalControlAction = matchedThreat.mechanicalControls.firstOrNull() ?: (matchedThreat.ipmPlan.physicalMechanicalControls.firstOrNull() ?: "Hand rogue or cultivate")
+            mechanicalControlAction = matchedThreat.mechanicalControls.firstOrNull()
+                ?: (matchedThreat.ipmPlan.physicalMechanicalControls.firstOrNull() ?: "Hand rogue or cultivate"),
+            analysisNotice = analysisNotice
         )
+    }
+
+    private fun defaultDomainLabel(category: ThreatType): String = when (category) {
+        ThreatType.PEST -> "Unclassified Insect / Mite Pest"
+        ThreatType.DISEASE -> "Unclassified Crop Disease"
+        ThreatType.WEED -> "Unclassified Invasive Weed"
+        ThreatType.SOIL -> "Field Soil Profile"
+    }
+
+    private fun defaultCabiHint(category: ThreatType): String = when (category) {
+        ThreatType.PEST -> "Evaluate Beauveria bassiana, Bacillus thuringiensis (Bt), Azadirachtin, or predatory phytoseiid mites."
+        ThreatType.DISEASE -> "Apply Trichoderma asperellum or Bacillus amyloliquefaciens biopesticides preventatively."
+        ThreatType.WEED -> "Promote legume cover crops (Desmodium push-pull) and competitive crop canopy."
+        ThreatType.SOIL -> "Inoculate with Rhizobium/Mycorrhizal biofertilizers and aged compost."
+    }
+
+    private fun defaultCulturalHint(category: ThreatType): String = when (category) {
+        ThreatType.PEST -> "Handpick larvae/egg masses, install yellow/blue sticky traps or pheromone lures, and maintain weed-free borders."
+        ThreatType.DISEASE -> "Rogue infected plants cleanly, switch from overhead sprinklers to drip irrigation, and rotate non-host crops."
+        ThreatType.WEED -> "Rogue before flowering/seed set and apply organic mulch or shallow cultivation."
+        ThreatType.SOIL -> "Test soil pH, incorporate well-decomposed compost, and avoid wet tillage."
     }
 }

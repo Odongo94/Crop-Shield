@@ -1,17 +1,10 @@
 package com.example.ui.screens.science
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -26,21 +19,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Functions
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,7 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -63,15 +52,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.science.curriculum.AgriCurriculumBooksCatalog
 import com.example.model.science.AgriBookReference
 import com.example.model.science.CurriculumPillarType
+import com.example.ui.components.GoogleSearchMode
+import com.example.ui.components.InAppGoogleBrowserDialog
+
+private data class BrowserLaunchRequest(
+    val query: String,
+    val mode: GoogleSearchMode,
+    val title: String
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -79,9 +75,9 @@ fun AgriBooksLibraryView(
     modifier: Modifier = Modifier,
     initialPillarFilter: CurriculumPillarType? = null
 ) {
-    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedPillarFilter by remember { mutableStateOf<CurriculumPillarType?>(initialPillarFilter) }
+    var activeBrowserRequest by remember { mutableStateOf<BrowserLaunchRequest?>(null) }
 
     val filteredBooks = remember(searchQuery, selectedPillarFilter) {
         AgriCurriculumBooksCatalog.books.filter { book ->
@@ -89,14 +85,26 @@ fun AgriBooksLibraryView(
             val matchesQuery = if (searchQuery.isBlank()) true else {
                 val q = searchQuery.trim().lowercase()
                 book.title.lowercase().contains(q) ||
-                book.authors.lowercase().contains(q) ||
-                book.coverSubject.lowercase().contains(q) ||
-                book.description.lowercase().contains(q) ||
-                book.keyChapters.any { it.lowercase().contains(q) } ||
-                book.syllabusTopicsCovered.any { it.lowercase().contains(q) }
+                    book.authors.lowercase().contains(q) ||
+                    book.coverSubject.lowercase().contains(q) ||
+                    book.description.lowercase().contains(q) ||
+                    book.isbn.lowercase().contains(q) ||
+                    book.examAndFieldFocus.lowercase().contains(q) ||
+                    book.keyChapters.any { it.lowercase().contains(q) } ||
+                    book.keyTakeaways.any { it.lowercase().contains(q) } ||
+                    book.keyFormulasOrPrinciples.any { it.lowercase().contains(q) } ||
+                    book.syllabusTopicsCovered.any { it.lowercase().contains(q) }
             }
             matchesPillar && matchesQuery
         }
+    }
+
+    val openInAppGoogle: (String, GoogleSearchMode, String) -> Unit = { query, mode, title ->
+        activeBrowserRequest = BrowserLaunchRequest(
+            query = query,
+            mode = mode,
+            title = title
+        )
     }
 
     Column(
@@ -108,7 +116,7 @@ fun AgriBooksLibraryView(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search academic textbooks, authors, topics...") },
+            placeholder = { Text("Search textbooks, formulas, authors, ISBN...") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Books") },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
@@ -156,30 +164,84 @@ fun AgriBooksLibraryView(
             }
         }
 
-        // Header description
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(8.dp),
+        // In-App Google Reference Hub Bar
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
+                .testTag("books_google_hub_card")
         ) {
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.MenuBook,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.MenuBook,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Factual Textbook Notes + In-App Google Research Browser",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
                 Text(
-                    text = "Authoritative academic textbooks & references aligned with the Agriculturist Licensure Syllabus.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Browse verified principles, equations, and ISBNs offline, or open Google Search, Google Scholar & Google Books right inside CropShield.",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val quickQuery = searchQuery.trim().ifBlank { "agronomy crop science soil fertility" }
+                    Button(
+                        onClick = {
+                            openInAppGoogle(
+                                quickQuery,
+                                GoogleSearchMode.GOOGLE_SEARCH,
+                                "Google Agronomy Lookup"
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_hub_open_google")
+                    ) {
+                        Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Search on Google", fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            openInAppGoogle(
+                                quickQuery,
+                                GoogleSearchMode.GOOGLE_SCHOLAR,
+                                "Google Scholar Papers"
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_hub_open_scholar")
+                    ) {
+                        Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Open Scholar", fontSize = 12.sp)
+                    }
+                }
             }
         }
 
@@ -193,7 +255,7 @@ fun AgriBooksLibraryView(
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Showing ${filteredBooks.size} Referenced Standard Textbooks",
+                    text = "Showing ${filteredBooks.size} Authoritative Agronomy & Crop Science Volumes",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -201,9 +263,12 @@ fun AgriBooksLibraryView(
             }
 
             items(filteredBooks, key = { it.id }) { book ->
-                BookReferenceCard(book = book, onOpenScholar = { query ->
-                    openGoogleScholar(context, query)
-                })
+                BookReferenceCard(
+                    book = book,
+                    onOpenInAppBrowser = { query, mode ->
+                        openInAppGoogle(query, mode, book.title)
+                    }
+                )
             }
 
             item {
@@ -211,13 +276,23 @@ fun AgriBooksLibraryView(
             }
         }
     }
+
+    // In-App Google Reference Browser Dialog
+    activeBrowserRequest?.let { req ->
+        InAppGoogleBrowserDialog(
+            initialQuery = req.query,
+            initialMode = req.mode,
+            referenceTitle = req.title,
+            onDismiss = { activeBrowserRequest = null }
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BookReferenceCard(
     book: AgriBookReference,
-    onOpenScholar: (String) -> Unit
+    onOpenInAppBrowser: (query: String, mode: GoogleSearchMode) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -234,7 +309,7 @@ fun BookReferenceCard(
             .testTag("book_card_${book.id}")
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header tag
+            // Header tags
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -286,11 +361,16 @@ fun BookReferenceCard(
                 modifier = Modifier.padding(top = 2.dp)
             )
 
-            // Publisher
+            // Publisher & ISBN
+            val publisherLine = if (book.isbn.isNotBlank()) {
+                "Publisher: ${book.publisher} • ISBN: ${book.isbn}"
+            } else {
+                "Publisher: ${book.publisher}"
+            }
             Text(
-                text = "Publisher: ${book.publisher}",
+                text = publisherLine,
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                 modifier = Modifier.padding(top = 2.dp)
             )
 
@@ -303,6 +383,16 @@ fun BookReferenceCard(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                 lineHeight = 18.sp
             )
+
+            if (book.examAndFieldFocus.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Exam & Field Focus: ${book.examAndFieldFocus}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -328,46 +418,149 @@ fun BookReferenceCard(
             }
 
             AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(top = 10.dp)) {
+                Column(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "Why It Is Authoritative:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = book.whyItIsAuthoritative,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-                    )
-
-                    Text(
-                        text = "Core Chapters & Syllabus Modules:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Column(
-                        modifier = Modifier.padding(top = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        book.keyChapters.forEach { chapter ->
-                            Row(verticalAlignment = Alignment.Top) {
+                    // Key Agronomic Takeaways
+                    if (book.keyTakeaways.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.testTag("book_notes_${book.id}"),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Bookmark,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(15.dp)
+                                )
                                 Text(
-                                    text = "• ",
+                                    text = "Factual Study Notes & Key Takeaways:",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                Text(
-                                    text = chapter,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            }
+                            book.keyTakeaways.forEach { note ->
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 3.dp, end = 6.dp).size(12.dp)
+                                    )
+                                    Text(
+                                        text = note,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        lineHeight = 17.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Key Formulas & Quantitative Principles
+                    if (book.keyFormulasOrPrinciples.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("book_formulas_${book.id}")
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Functions,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Key Formulas & Quantitative Principles:",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                                book.keyFormulasOrPrinciples.forEach { formula ->
+                                    Text(
+                                        text = "• $formula",
+                                        fontSize = 11.5.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Why It Is Authoritative
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Why It Is Authoritative:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = book.whyItIsAuthoritative,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    // Core Chapters
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Core Chapters & Syllabus Modules (tap to look up on Google):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        book.keyChapters.forEach { chapter ->
+                            Surface(
+                                onClick = {
+                                    onOpenInAppBrowser(
+                                        "${book.title} $chapter",
+                                        GoogleSearchMode.GOOGLE_SEARCH
+                                    )
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = chapter,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -376,53 +569,70 @@ fun BookReferenceCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Action row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Expand / Collapse + In-App Google Integration Buttons
+            OutlinedButton(
+                onClick = { isExpanded = !isExpanded },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_toggle_book_notes_${book.id}")
             ) {
-                OutlinedButton(
-                    onClick = { isExpanded = !isExpanded },
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(if (isExpanded) "Hide Chapters" else "View Chapters")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Text(if (isExpanded) "Hide Study Notes & Chapters" else "View Study Notes, Formulas & Chapters")
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Button(
-                    onClick = { onOpenScholar(book.scholarSearchQuery) },
+                    onClick = {
+                        onOpenInAppBrowser(book.googleSearchQuery, GoogleSearchMode.GOOGLE_SEARCH)
+                    },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    ),
+                    modifier = Modifier.testTag("btn_book_google_${book.id}")
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Study on Scholar", fontSize = 12.sp)
+                    Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Google Info", fontSize = 12.sp)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onOpenInAppBrowser(book.scholarSearchQuery, GoogleSearchMode.GOOGLE_SCHOLAR)
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("btn_book_scholar_${book.id}")
+                ) {
+                    Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Scholar", fontSize = 12.sp)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onOpenInAppBrowser("${book.title} ${book.authors}", GoogleSearchMode.GOOGLE_BOOKS)
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("btn_book_books_${book.id}")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Google Books", fontSize = 12.sp)
                 }
             }
         }
-    }
-}
-
-private fun openGoogleScholar(context: Context, query: String) {
-    try {
-        val url = "https://scholar.google.com/scholar?q=" + Uri.encode(query)
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        Toast.makeText(context, "Unable to launch browser: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }

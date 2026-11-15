@@ -103,6 +103,9 @@ fun CommunityAndSupportScreen(
     onSendDirectMessage: (text: String) -> Unit,
     onSubmitFeedback: (source: String, topic: String, wasHelpful: Boolean, area: String, suggestion: String) -> Unit,
     onOpenAdminConsole: () -> Unit = {},
+    onRequestAiReply: (CommunityMessage) -> Unit = {},
+    isCommunityAiResponding: Boolean = false,
+    statusMessage: String? = null,
     initialTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -201,7 +204,10 @@ fun CommunityAndSupportScreen(
                 onAuthCompleted = onAuthCompleted,
                 onSendCommunityMessage = onSendCommunityMessage,
                 onTogglePinSolution = onTogglePinSolution,
-                onDeleteCommunityMessage = onDeleteCommunityMessage
+                onDeleteCommunityMessage = onDeleteCommunityMessage,
+                onRequestAiReply = onRequestAiReply,
+                isCommunityAiResponding = isCommunityAiResponding,
+                statusMessage = statusMessage
             )
 
             1 -> DirectAdminChatTab(
@@ -232,7 +238,10 @@ private fun CommunityChatTab(
     onAuthCompleted: (FirebaseUser, FarmerRegistrationInput) -> Unit,
     onSendCommunityMessage: (topic: String, text: String) -> Unit,
     onTogglePinSolution: (messageId: String, pinned: Boolean) -> Unit,
-    onDeleteCommunityMessage: (messageId: String) -> Unit
+    onDeleteCommunityMessage: (messageId: String) -> Unit,
+    onRequestAiReply: (CommunityMessage) -> Unit,
+    isCommunityAiResponding: Boolean,
+    statusMessage: String?
 ) {
     if (currentUser == null) {
         LazyColumn(
@@ -275,12 +284,25 @@ private fun CommunityChatTab(
             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "Shamba AI auto-replies within 5 min if no farmer responds & fact-checks unsafe advice.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-            )
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (isCommunityAiResponding) {
+                        "Shamba AI is analyzing the question & drafting a grounded reply..."
+                    } else {
+                        "Shamba AI auto-replies within 5 min if no farmer responds (or tap Ask AI Now) & fact-checks unsafe advice."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                if (!statusMessage.isNullOrBlank()) {
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
 
         // Topic filter strip
@@ -477,6 +499,29 @@ private fun CommunityChatTab(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
+
+                                if (msg.authorRole == "farmer" &&
+                                    com.example.data.ai.CommunityAiModerator.isQuestionUnanswered(msg, messages)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { onRequestAiReply(msg) },
+                                            enabled = !isCommunityAiResponding,
+                                            modifier = Modifier
+                                                .minimumInteractiveComponentSize()
+                                                .testTag("btn_ask_shamba_ai_${msg.id}")
+                                        ) {
+                                            Text(
+                                                text = if (isCommunityAiResponding) "Thinking..." else "Ask Shamba AI Now",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

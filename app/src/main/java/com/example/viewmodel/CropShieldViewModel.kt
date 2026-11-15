@@ -651,6 +651,9 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
 
     private var communityAiTimerJob: Job? = null
     private val processedAiActionIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val firstObservedTimeByMsgId = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val _isCommunityAiResponding = MutableStateFlow(false)
+    val isCommunityAiResponding: StateFlow<Boolean> = _isCommunityAiResponding.asStateFlow()
 
     init {
         // Ensure Room database is seeded with complete threat metadata, lifecycles, and IPM solutions
@@ -689,6 +692,18 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
+        val nowMs = System.currentTimeMillis()
+        messages.forEach { msg ->
+            if (msg.id.isNotBlank()) {
+                val ts = CommunityAiModerator.messageTimestampMs(msg)
+                if (ts > 0L) {
+                    firstObservedTimeByMsgId.putIfAbsent(msg.id, ts)
+                } else {
+                    firstObservedTimeByMsgId.putIfAbsent(msg.id, nowMs)
+                }
+            }
+        }
+
         val existingIds = messages.map { it.id }.toSet()
 
         // 1. Fact-check and correct any invalid/unsafe farmer responses using existing app databases
@@ -701,7 +716,12 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
                     try {
                         val action = CommunityAiModerator.buildFactCheckCorrection(msg, issue)
                         repo.sendCommunityAiMessage(action.docId, action.topic, action.messageText)
-                    } catch (_: Exception) {
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        processedAiActionIds.remove(corrId)
+                        throw e
+                    } catch (e: Exception) {
+                        android.util.Log.e("CropShieldVM", "Community AI fact-check failed: ${e.message}", e)
+                        _cloudSyncMessage.value = "Shamba AI fact-check sync error: ${e.localizedMessage}"
                         processedAiActionIds.remove(corrId)
                     }
                 }
@@ -711,17 +731,26 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
         // 2. Auto-respond to farmer questions unanswered for 5 minutes (300,000 ms)
         val evaluation = CommunityAiModerator.evaluateUnansweredQuestions(
             messages = messages,
-            nowMs = System.currentTimeMillis()
+            nowMs = System.currentTimeMillis(),
+            fallbackTimestampsMs = firstObservedTimeByMsgId
         )
         evaluation.readyQuestions.forEach { question ->
             val respId = CommunityAiModerator.aiResponseDocId(question.id)
             if (respId !in existingIds && respId !in processedAiActionIds) {
                 processedAiActionIds.add(respId)
+                _isCommunityAiResponding.value = true
                 try {
                     val action = CommunityAiModerator.buildGroundedAiReply(question)
                     repo.sendCommunityAiMessage(action.docId, action.topic, action.messageText)
-                } catch (_: Exception) {
+                } catch (e: kotlinx.coroutines.CancellationException) {
                     processedAiActionIds.remove(respId)
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.e("CropShieldVM", "Community AI auto-reply failed: ${e.message}", e)
+                    _cloudSyncMessage.value = "Shamba AI auto-reply error: ${e.localizedMessage}"
+                    processedAiActionIds.remove(respId)
+                } finally {
+                    _isCommunityAiResponding.value = false
                 }
             }
         }
@@ -819,10 +848,16 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setSelectedCropHint(hint: String) {
         _selectedCropHint.value = hint
+        if (_scanBitmap.value != null) {
+            analyzeCurrentPhoto()
+        }
     }
 
     fun setSelectedCategoryFilter(category: ThreatType?) {
         _selectedCategoryFilter.value = category
+        if (_scanBitmap.value != null) {
+            analyzeCurrentPhoto()
+        }
     }
 
     fun onPhotoCaptured(bitmap: Bitmap) {
@@ -844,6 +879,8 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
                     categoryFilter = _selectedCategoryFilter.value
                 )
                 _scanResult.value = result
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _scanError.value = e.message ?: "Analysis failed"
             } finally {
@@ -1052,6 +1089,31 @@ class CropShieldViewModel(application: Application) : AndroidViewModel(applicati
                 )
             } catch (e: Exception) {
                 _cloudSyncMessage.value = e.message
+            }
+        }
+    }
+
+    fun requestImmediateCommunityAiReply(question: CommunityMessage) {
+        val repo = cloudSyncRepo ?: return
+        if (currentUser.value == null || question.id.isBlank()) return
+        val respId = CommunityAiModerator.aiResponseDocId(question.id)
+        if (respId in processedAiActionIds) return
+        processedAiActionIds.add(respId)
+        viewModelScope.launch(Dispatchers.IO) {
+            _isCommunityAiResponding.value = true
+            try {
+                val action = CommunityAiModerator.buildGroundedAiReply(question)
+                repo.sendCommunityAiMessage(action.docId, action.topic, action.messageText)
+                _cloudSyncMessage.value = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                processedAiActionIds.remove(respId)
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e("CropShieldVM", "Immediate Community AI reply failed: ${e.message}", e)
+                _cloudSyncMessage.value = "Shamba AI could not post reply: ${e.localizedMessage ?: "error"}"
+                processedAiActionIds.remove(respId)
+            } finally {
+                _isCommunityAiResponding.value = false
             }
         }
     }

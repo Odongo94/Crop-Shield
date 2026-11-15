@@ -2,6 +2,7 @@ package com.example.data.ai
 
 import com.example.data.AgronomyCatalog
 import com.example.data.ThreatCatalog
+import com.example.data.quarantine.QuarantinePestCatalog
 import com.example.model.PathogenClass
 import com.example.model.ThreatType
 import com.example.model.cloud.CommunityMessage
@@ -33,7 +34,7 @@ data class UnansweredEvaluationResult(
 /**
  * Automated Community AI Moderator & Agronomic Fact-Checker.
  * 1. Auto-responds to unanswered farmer questions after a 5-minute (300,000 ms) interval
- *    if no other farmer or advisor has replied.
+ *    if no other farmer or advisor has replied, and supports immediate on-demand Shamba AI help.
  * 2. Detects and corrects invalid, unsafe, or agronomically incorrect farmer replies using
  *    CropShield's verified ThreatCatalog, AgronomyCatalog, and Soil/Poultry databases.
  */
@@ -56,28 +57,91 @@ object CommunityAiModerator {
 
     fun looksLikeFarmerQuestion(text: String): Boolean {
         val q = text.trim().lowercase()
-        if (q.length < 8) return false
+        if (q.length < 6) return false
         if (q.contains("?")) return true
 
         val interrogativeOrHelpSignals = listOf(
             "how ", "what ", "which ", "why ", "when ", "where ", "who ",
             "can i ", "should i ", "could i ", "do i ", "is it ", "is there ",
             "anyone know", "does anyone", "please help", "need help", "help me",
-            "recommend ", "advice on", "advise on", "what is the best", "how to "
+            "recommend ", "advice on", "advise on", "what is the best", "how to ",
+            "tell me", "explain "
         )
         if (interrogativeOrHelpSignals.any { q.contains(it) }) return true
 
         val prescriptiveAdviceStarters = listOf(
             "use ", "spray ", "apply ", "scout ", "mix ", "uproot ", "rogue ",
-            "prune ", "try ", "add ", "avoid ", "never ", "always ", "water "
+            "prune ", "try ", "add ", "avoid ", "never ", "always ", "water ",
+            "you can ", "you should ", "just "
         )
         if (prescriptiveAdviceStarters.any { q.startsWith(it) }) return false
 
-        val symptomReportSignals = listOf(
+        val symptomOrProblemSignals = listOf(
             "my crop", "my maize", "my tomato", "my beans", "my chicken", "my cow",
-            "yellowing", "wilting", "dying", "rotting", "spots on", "holes in"
+            "my cabbage", "my potato", "my farm", "my onion", "my pepper",
+            "yellowing", "wilting", "dying", "rotting", "spots on", "holes in",
+            "eating ", "attacking", "infest", "chewing", "curling", "stunted",
+            "armyworm", "whitefl", "aphid", "thrips", "mite", "blight", "rust",
+            "mildew", "wilt", "caterpillar", "borer", "striga", "weeds", "fertilizer",
+            "soil ph", "vaccine", "chicks"
         )
-        return symptomReportSignals.any { q.contains(it) }
+        return symptomOrProblemSignals.any { q.contains(it) }
+    }
+
+    /**
+     * Checks whether a farmer question has already been answered by another farmer,
+     * an advisor, or Shamba AI.
+     */
+    fun isQuestionUnanswered(
+        question: CommunityMessage,
+        allMessages: List<CommunityMessage>,
+        fallbackTimestampsMs: Map<String, Long> = emptyMap()
+    ): Boolean {
+        if (question.authorRole != "farmer" || question.id.isBlank()) return false
+        if (!looksLikeFarmerQuestion(question.messageText)) return false
+
+        val ordered = allMessages.sortedWith(
+            compareBy<CommunityMessage> {
+                val ts = messageTimestampMs(it)
+                if (ts > 0L) ts else (fallbackTimestampsMs[it.id] ?: Long.MAX_VALUE)
+            }.thenBy { it.id }
+        )
+        val existingIds = ordered.map { it.id }.toSet()
+        val expectedAiDocId = aiResponseDocId(question.id)
+        if (expectedAiDocId in existingIds) return false
+
+        val index = ordered.indexOfFirst { it.id == question.id }
+        if (index < 0) return false
+
+        return !ordered.drop(index + 1).any { later ->
+            isValidReplyTo(question, later, expectedAiDocId)
+        }
+    }
+
+    private fun isValidReplyTo(
+        question: CommunityMessage,
+        later: CommunityMessage,
+        expectedAiDocId: String
+    ): Boolean {
+        return when (later.authorRole) {
+            "super_admin" -> later.topic == question.topic ||
+                later.messageText.contains(question.authorName, ignoreCase = true) ||
+                !later.messageText.trim().endsWith("?")
+            AI_AUTHOR_ROLE -> later.id == expectedAiDocId
+            "farmer" -> {
+                if (later.authorId == question.authorId) {
+                    false
+                } else {
+                    val sameTopicOrMentionsAuthor = later.topic == question.topic ||
+                        (question.authorName.isNotBlank() && later.messageText.contains(question.authorName, ignoreCase = true))
+                    val isStandaloneNewQuestion = later.messageText.trim().endsWith("?") &&
+                        looksLikeFarmerQuestion(later.messageText) &&
+                        !(question.authorName.isNotBlank() && later.messageText.contains(question.authorName, ignoreCase = true))
+                    sameTopicOrMentionsAuthor && !isStandaloneNewQuestion
+                }
+            }
+            else -> false
+        }
     }
 
     /**
@@ -88,12 +152,16 @@ object CommunityAiModerator {
     fun evaluateUnansweredQuestions(
         messages: List<CommunityMessage>,
         nowMs: Long = System.currentTimeMillis(),
-        delayMs: Long = DEFAULT_RESPONSE_DELAY_MS
+        delayMs: Long = DEFAULT_RESPONSE_DELAY_MS,
+        fallbackTimestampsMs: Map<String, Long> = emptyMap()
     ): UnansweredEvaluationResult {
         if (messages.isEmpty()) return UnansweredEvaluationResult(emptyList(), null)
 
         val ordered = messages.sortedWith(
-            compareBy<CommunityMessage> { messageTimestampMs(it) }.thenBy { it.id }
+            compareBy<CommunityMessage> {
+                val ts = messageTimestampMs(it)
+                if (ts > 0L) ts else (fallbackTimestampsMs[it.id] ?: Long.MAX_VALUE)
+            }.thenBy { it.id }
         )
         val existingIds = ordered.map { it.id }.toSet()
         val ready = mutableListOf<CommunityMessage>()
@@ -107,29 +175,13 @@ object CommunityAiModerator {
             if (expectedAiDocId in existingIds) return@forEachIndexed
 
             val hasSubsequentReply = ordered.drop(index + 1).any { later ->
-                when (later.authorRole) {
-                    "super_admin" -> later.topic == msg.topic ||
-                        later.messageText.contains(msg.authorName, ignoreCase = true) ||
-                        !later.messageText.trim().endsWith("?")
-                    AI_AUTHOR_ROLE -> later.id == expectedAiDocId
-                    "farmer" -> {
-                        if (later.authorId == msg.authorId) {
-                            false
-                        } else {
-                            val sameTopicOrMentionsAuthor = later.topic == msg.topic ||
-                                (msg.authorName.isNotBlank() && later.messageText.contains(msg.authorName, ignoreCase = true))
-                            val isStandaloneNewQuestion = later.messageText.trim().endsWith("?") &&
-                                looksLikeFarmerQuestion(later.messageText) &&
-                                !(msg.authorName.isNotBlank() && later.messageText.contains(msg.authorName, ignoreCase = true))
-                            sameTopicOrMentionsAuthor && !isStandaloneNewQuestion
-                        }
-                    }
-                    else -> false
-                }
+                isValidReplyTo(msg, later, expectedAiDocId)
             }
             if (hasSubsequentReply) return@forEachIndexed
 
-            val msgTimeMs = messageTimestampMs(msg)
+            val msgTimeMs = messageTimestampMs(msg).let { ts ->
+                if (ts > 0L) ts else (fallbackTimestampsMs[msg.id] ?: 0L)
+            }
             if (msgTimeMs <= 0L) return@forEachIndexed
 
             val elapsedMs = (nowMs - msgTimeMs).coerceAtLeast(0L)
@@ -308,12 +360,12 @@ object CommunityAiModerator {
 
     /**
      * Generates a community AI response grounded in CropShield's existing databases
-     * (and uses Gemini online when configured, anchored to catalog facts).
+     * (and uses Firebase AI Logic Gemini online when available, anchored to catalog facts).
      */
     suspend fun buildGroundedAiReply(question: CommunityMessage): CommunityAiAction {
         val catalogFacts = gatherRelevantCatalogFacts(question.messageText, question.topic)
         val prompt = buildString {
-            appendLine("You are Shamba AI Agronomist responding in the CropShield farmer community forum after 5 minutes with no peer reply.")
+            appendLine("You are Shamba AI Agronomist responding in the CropShield farmer community forum.")
             appendLine("Keep the reply concise (under 1100 characters), practical, respectful, and strictly grounded in the verified CropShield data below.")
             appendLine("NEVER mention Super Admin or any developer email address.")
             appendLine()
@@ -372,6 +424,7 @@ object CommunityAiModerator {
         val q = "$query $topic".lowercase()
         val matchedThreats = ThreatCatalog.allThreats.filter { threat ->
             q.contains(threat.name.lowercase()) ||
+                q.contains(threat.scientificName.lowercase()) ||
                 threat.targetCrops.any { crop -> q.contains(crop.lowercase().substringBefore(" (")) }
         }.take(2)
 
@@ -382,6 +435,11 @@ object CommunityAiModerator {
                 t.ipmPlan.biologicalControls.firstOrNull()?.let { appendLine("  Biocontrol: $it") }
                 t.ipmPlan.chemicalControls.firstOrNull()?.let { c ->
                     appendLine("  Chemical: ${c.tradeName.ifBlank { c.activeIngredient }} (${c.activeIngredient}) @ ${c.dosagePerKnapsack}, PHI ${c.phiDays} days")
+                }
+            }
+            if (q.contains("fcm") || q.contains("codling") || q.contains("quarantine")) {
+                QuarantinePestCatalog.quarantinePests.firstOrNull()?.let { qp ->
+                    appendLine("• ${qp.commonName} (${qp.scientificName}): ${qp.reasonForQuarantineListing.take(220)}")
                 }
             }
             if (q.contains("fertilizer") || q.contains("dap") || q.contains("can") || q.contains("soil") || q.contains("lime")) {
@@ -396,7 +454,7 @@ object CommunityAiModerator {
 
     private fun formatOfflineAutoReply(questionText: String, catalogFacts: String): String {
         return buildString {
-            append("Auto-Advisory (5-min unanswered check): ")
+            append("Shamba AI Advisory: ")
             if (catalogFacts.isNotBlank()) {
                 append(catalogFacts)
             } else {
@@ -412,6 +470,7 @@ object CommunityAiModerator {
     private fun sanitizeCommunityAiOutput(raw: String, fallback: String): String {
         val cleaned = raw
             .replace(Regex("(?i)Signed off by.*?(\n|$)"), "")
+            .replace(Regex("(?i)_Status:.*?_"), "")
             .replace(Regex("(?i)odongovincento@gmail\\.com"), "")
             .replace(Regex("(?i)super\\s*admin"), "Agronomy Advisor")
             .trim()

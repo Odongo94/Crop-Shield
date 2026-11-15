@@ -113,7 +113,12 @@ data class AgriBookReference(
     val keyChapters: List<String>,
     val syllabusTopicsCovered: List<String>,
     val whyItIsAuthoritative: String,
-    val scholarSearchQuery: String
+    val scholarSearchQuery: String,
+    val isbn: String = "",
+    val keyTakeaways: List<String> = emptyList(),
+    val keyFormulasOrPrinciples: List<String> = emptyList(),
+    val examAndFieldFocus: String = "",
+    val googleSearchQuery: String = scholarSearchQuery
 )
 
 /**
